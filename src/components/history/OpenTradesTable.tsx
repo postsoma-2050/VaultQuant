@@ -54,13 +54,21 @@ const formatCurrency = (val: number): string => {
 
 // Helper to calculate remaining quantity
 const getRemainingQty = (trade: Trades): number => {
-    const originalQty = Number(trade.quantity) || 0;
+    return Number(trade.quantity) || 0;
+};
+
+// Helper to calculate initial quantity before scale-outs
+const getInitialQty = (trade: Trades): number => {
+    if (trade.openOtherDetails?.initialQty) {
+        const initNum = Number(trade.openOtherDetails.initialQty);
+        if (!isNaN(initNum) && initNum > 0) return initNum;
+    }
     const closeEvents = trade.closeEvents || [];
     const soldQty = closeEvents.reduce(
         (sum, event) => sum + (Number(event.quantitySold) || Number((event as any).qty) || 0),
         0
     );
-    return originalQty - soldQty;
+    return (Number(trade.quantity) || 0) + soldQty;
 };
 
 // Helper to calculate partial close total P/L
@@ -289,9 +297,9 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
 
                                     {/* Quantity */}
                                     <div className="col-span-1 hidden md:block text-center text-sm font-mono tabular-nums text-zinc-600">
-                                        {remainingQty !== Number(trade.quantity) ? (
+                                        {hasPartials ? (
                                             <span className="text-amber-600 font-medium">
-                                                {formatQty(remainingQty)} / {formatQty(trade.quantity || "")}
+                                                {formatQty(remainingQty)} / {formatQty(getInitialQty(trade))}
                                             </span>
                                         ) : (
                                             formatQty(trade.quantity || "")

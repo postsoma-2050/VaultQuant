@@ -68,9 +68,7 @@ export default function Page() {
                 netRealizedPnL += partialPnL;
 
                 // Calculate remaining quantity and entry price
-                const originalQty = parseFloat(String(trade.quantity || "0")) || 0;
-                const soldQty = closeEvents.reduce((sum, event) => sum + (event.quantitySold || 0), 0);
-                const remainingQty = originalQty - soldQty;
+                const remainingQty = parseFloat(String(trade.quantity || "0")) || 0;
 
                 if (remainingQty > 0) {
                     const entryPrice = parseFloat(String(trade.entryPrice || "0")) || 0;

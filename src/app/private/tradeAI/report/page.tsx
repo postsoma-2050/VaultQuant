@@ -35,13 +35,7 @@ export default function Report() {
 
     // Helper to calculate remaining quantity of a trade (same as OpenTradesTable)
     const getRemainingQty = (trade: Trades): number => {
-        const originalQty = Number(trade.quantity) || 0;
-        const closeEvents = trade.closeEvents || [];
-        const soldQty = closeEvents.reduce(
-            (sum: number, event: CloseEvent) => sum + (event.quantitySold || 0),
-            0
-        );
-        return originalQty - soldQty;
+        return Number(trade.quantity) || 0;
     };
 
     // 2. Enrich trades with real-time floating P/L for open positions
