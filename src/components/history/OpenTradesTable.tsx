@@ -19,6 +19,11 @@ import EditTrade from "./EditTrade";
 import { parseTradeNotes } from "@/lib/tradeNotes";
 import dayjs from "dayjs";
 import { useMarketPrices } from "@/hooks/useMarketPrices";
+import { deletePositionEvent } from "@/server/actions/trades";
+import { useAppDispatch } from "@/redux/store";
+import { updateTradeInList } from "@/redux/slices/tradeRecordsSlice";
+import { updateTradeInFilteredList } from "@/redux/slices/historyPageSlice";
+import { toast } from "sonner";
 
 type OpenTradesTableProps = {
     trades: Trades[];
@@ -78,11 +83,13 @@ const getPartialClosesTotal = (trade: Trades): number => {
 };
 
 export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
+    const dispatch = useAppDispatch();
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [tradeToDelete, setTradeToDelete] = useState<Trades | null>(null);
     const [expandedTradeId, setExpandedTradeId] = useState<string | null>(null);
     const [openSheetTradeId, setOpenSheetTradeId] = useState<string | null>(null);
     const [openAdjustSheetTradeId, setOpenAdjustSheetTradeId] = useState<string | null>(null);
+    const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
     const { handleDeleteOpenTrade } = useDeleteOpenTrade();
 
     const symbols = [...new Set((trades || []).map((t) => t.symbolName).filter(Boolean))];
@@ -537,8 +544,8 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
                                                                 )}
                                                             </div>
 
-                                                            {/* Result or Avg Price */}
-                                                            <div className="col-span-3 flex items-center gap-1 justify-end font-semibold">
+                                                            {/* Result or Avg Price + Delete */}
+                                                            <div className="col-span-3 flex items-center gap-1.5 justify-end font-semibold">
                                                                 {isScaleIn ? (
                                                                     <span className="text-xs text-zinc-500 font-medium">
                                                                         Avg: ${formatPrice(runningPrice)}
@@ -557,6 +564,33 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
                                                                     </>
                                                                 ) : (
                                                                     <span className="text-zinc-300">—</span>
+                                                                )}
+                                                                {event.id && (
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={deletingEventId === event.id}
+                                                                        onClick={async (e) => {
+                                                                            e.stopPropagation();
+                                                                            if (!event.id) return;
+                                                                            setDeletingEventId(event.id);
+                                                                            try {
+                                                                                const res = await deletePositionEvent(trade.id, event.id);
+                                                                                if (res?.updatedTrade) {
+                                                                                    dispatch(updateTradeInList(res.updatedTrade));
+                                                                                    dispatch(updateTradeInFilteredList(res.updatedTrade));
+                                                                                    toast.success("Position event deleted successfully!");
+                                                                                }
+                                                                            } catch {
+                                                                                toast.error("Failed to delete position event.");
+                                                                            } finally {
+                                                                                setDeletingEventId(null);
+                                                                            }
+                                                                        }}
+                                                                        className="p-1 rounded text-zinc-300 hover:text-rose-600 hover:bg-rose-50 transition-colors shrink-0"
+                                                                        title="Delete this position event"
+                                                                    >
+                                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                                    </button>
                                                                 )}
                                                             </div>
                                                         </div>

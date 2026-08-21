@@ -45,10 +45,8 @@ export const CloseDetailsTab = ({
     const quantityValue = watch("quantity");
     const quantitySoldValue = watch("quantitySold");
 
-    // Calculate remaining quantity from closeEvents
-    const originalQty = Number(quantityValue) || 0;
-    const alreadySoldQty = closeEvents.reduce((sum, event) => sum + (event.quantitySold || 0), 0);
-    const remainingQty = originalQty - alreadySoldQty;
+    // Calculate remaining quantity
+    const remainingQty = Number(quantityValue) || 0;
     const hasPartialCloses = closeEvents.length > 0;
 
     // Prefill quantitySold with remaining quantity if empty

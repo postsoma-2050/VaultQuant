@@ -137,16 +137,73 @@ export async function updateTradeRecord(
     }
 
     try {
+        const [existingTrade] = await db
+            .select()
+            .from(TradeTable)
+            .where(eq(TradeTable.id, tradeId));
+
+        if (!existingTrade) {
+            return { error: true };
+        }
+
         // Destructure notes out — notes are managed exclusively by updateTradeNotes()
-        // to prevent stale form values overwriting note edits made in the Notes tab.
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { notes: _notes, ...tradeFields } = data;
-        await db
-            .update(TradeTable)
-            .set({ ...tradeFields })
-            .where(eq(TradeTable.id, tradeId));
+
+        const closeEvents = existingTrade.closeEvents || [];
+        if (closeEvents.length > 0) {
+            // If the trade has scale-in/scale-out events:
+            // Treat tradeFields.quantity & entryPrice as the new initial entry values
+            const initialQty = Number(tradeFields.quantity || "0");
+            const initialEntryPrice = Number(tradeFields.entryPrice || "0");
+
+            const updatedOpenOtherDetails = {
+                ...(existingTrade.openOtherDetails || {}),
+                initialQty: String(initialQty),
+                initialEntryPrice: String(initialEntryPrice),
+            };
+
+            let qty = initialQty;
+            let price = initialEntryPrice;
+
+            for (const event of closeEvents) {
+                const qChange = event.quantityChange !== undefined ? event.quantityChange : (event.quantitySold !== undefined ? -event.quantitySold : 0);
+                const eventPrice = event.price !== undefined ? event.price : (event.sellPrice !== undefined ? event.sellPrice : 0);
+
+                if (qChange > 0) {
+                    const newQty = qty + qChange;
+                    price = newQty > 0 ? (price * qty + eventPrice * qChange) / newQty : price;
+                    qty = newQty;
+                } else if (qChange < 0) {
+                    qty = qty + qChange;
+                }
+            }
+
+            const updatedDeposit = qty * price;
+            const isClosed = qty <= 0;
+
+            await db
+                .update(TradeTable)
+                .set({
+                    ...tradeFields,
+                    quantity: qty.toString(),
+                    entryPrice: price.toString(),
+                    openOtherDetails: updatedOpenOtherDetails,
+                    deposit: updatedDeposit > 0 ? updatedDeposit.toString() : null,
+                    isActiveTrade: !isClosed,
+                })
+                .where(eq(TradeTable.id, tradeId));
+        } else {
+            // No position history events — regular simple update
+            await db
+                .update(TradeTable)
+                .set({ ...tradeFields })
+                .where(eq(TradeTable.id, tradeId));
+        }
+
+        revalidatePath("/private/history");
     } catch (err) {
-        console.error(err);
+        console.error("Error updating trade record:", err);
         return { error: true };
     }
     return;
@@ -199,9 +256,20 @@ export async function adjustTradePosition(
         let initialQtyStr = openOtherDetails.initialQty;
         let initialEntryPriceStr = openOtherDetails.initialEntryPrice;
 
+        const existingEvents = mergedTrade.closeEvents || [];
+
         if (initialQtyStr === undefined || initialEntryPriceStr === undefined) {
-            initialQtyStr = mergedTrade.quantity || "0";
+            const existingEventsQtyChange = existingEvents.reduce((sum, e) => {
+                const qChange = e.quantityChange !== undefined ? e.quantityChange : (e.quantitySold !== undefined ? -e.quantitySold : 0);
+                return sum + qChange;
+            }, 0);
+
+            const currentQty = Number(mergedTrade.quantity || "0");
+            const computedInitialQty = currentQty - existingEventsQtyChange;
+
+            initialQtyStr = String(computedInitialQty > 0 ? computedInitialQty : currentQty);
             initialEntryPriceStr = mergedTrade.entryPrice || "0";
+
             openOtherDetails = {
                 ...openOtherDetails,
                 initialQty: initialQtyStr,
@@ -237,7 +305,6 @@ export async function adjustTradePosition(
             sellPrice: adjustQty < 0 ? adjustPrice : 0,
         };
 
-        const existingEvents = mergedTrade.closeEvents || [];
         const updatedEvents = [...existingEvents, newEvent];
 
         // 4. Sequentially recalculate the parent trade's live quantity and entry price
@@ -294,6 +361,93 @@ export async function adjustTradePosition(
         return { error: false, updatedTrade };
     } catch (err) {
         console.error("Error adjusting position:", err);
+        return { error: true };
+    }
+}
+
+export async function deletePositionEvent(
+    tradeId: string,
+    eventId: string
+): Promise<{ error: boolean; updatedTrade?: Trades } | undefined> {
+    await ensureLocalUser();
+
+    try {
+        const [existingTrade] = await db
+            .select()
+            .from(TradeTable)
+            .where(eq(TradeTable.id, tradeId));
+
+        if (!existingTrade) return { error: true };
+
+        const rawEvents = existingTrade.closeEvents || [];
+        const updatedEvents = rawEvents.filter((e) => e.id !== eventId);
+
+        let openOtherDetails = existingTrade.openOtherDetails || {};
+        let initialQtyStr = openOtherDetails.initialQty;
+        let initialEntryPriceStr = openOtherDetails.initialEntryPrice;
+
+        if (initialQtyStr === undefined || initialEntryPriceStr === undefined) {
+            const rawEventsQtyChange = rawEvents.reduce((sum, e) => {
+                const qChange = e.quantityChange !== undefined ? e.quantityChange : (e.quantitySold !== undefined ? -e.quantitySold : 0);
+                return sum + qChange;
+            }, 0);
+            const currentQty = Number(existingTrade.quantity || "0");
+            const computedInitialQty = currentQty - rawEventsQtyChange;
+
+            initialQtyStr = String(computedInitialQty > 0 ? computedInitialQty : currentQty);
+            initialEntryPriceStr = existingTrade.entryPrice || "0";
+
+            openOtherDetails = {
+                ...openOtherDetails,
+                initialQty: initialQtyStr,
+                initialEntryPrice: initialEntryPriceStr,
+            };
+        }
+
+        const initialQty = Number(initialQtyStr);
+        const initialEntryPrice = Number(initialEntryPriceStr);
+
+        let qty = initialQty;
+        let price = initialEntryPrice;
+
+        for (const event of updatedEvents) {
+            const qChange = event.quantityChange !== undefined ? event.quantityChange : (event.quantitySold !== undefined ? -event.quantitySold : 0);
+            const eventPrice = event.price !== undefined ? event.price : (event.sellPrice !== undefined ? event.sellPrice : 0);
+
+            if (qChange > 0) {
+                const newQty = qty + qChange;
+                price = newQty > 0 ? (price * qty + eventPrice * qChange) / newQty : price;
+                qty = newQty;
+            } else if (qChange < 0) {
+                qty = qty + qChange;
+            }
+        }
+
+        const updatedDeposit = qty * price;
+        const isClosed = qty <= 0;
+
+        const updatedFields = {
+            quantity: qty.toString(),
+            entryPrice: price.toString(),
+            closeEvents: updatedEvents,
+            isActiveTrade: !isClosed,
+            openOtherDetails,
+            deposit: updatedDeposit > 0 ? updatedDeposit.toString() : null,
+            closeDate: isClosed ? (updatedEvents[updatedEvents.length - 1]?.date || new Date().toISOString()) : null,
+            closeTime: isClosed ? (updatedEvents[updatedEvents.length - 1]?.time || "16:00") : null,
+            sellPrice: isClosed ? (updatedEvents[updatedEvents.length - 1]?.price?.toString() || null) : null,
+            quantitySold: isClosed ? initialQty.toString() : null,
+            result: isClosed ? updatedEvents.reduce((sum, e) => sum + (e.result || 0), 0).toString() : null,
+        };
+
+        await db.update(TradeTable).set(updatedFields).where(eq(TradeTable.id, tradeId));
+        revalidatePath("/private/history");
+
+        const [updatedRawTrade] = await db.select().from(TradeTable).where(eq(TradeTable.id, tradeId));
+        const updatedTrade = processTradeRow(updatedRawTrade);
+        return { error: false, updatedTrade };
+    } catch (err) {
+        console.error("Error deleting position event:", err);
         return { error: true };
     }
 }

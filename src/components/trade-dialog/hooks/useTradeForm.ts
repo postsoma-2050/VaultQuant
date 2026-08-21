@@ -60,9 +60,9 @@ export const useTradeForm = ({ editMode = false, existingTrade, day, onRequestCl
             deposit: existingTrade.deposit || "",
             instrumentName: existingTrade.instrumentName || "",
             symbolName: existingTrade.symbolName || "",
-            entryPrice: existingTrade.entryPrice || "",
+            entryPrice: existingTrade.openOtherDetails?.initialEntryPrice || existingTrade.entryPrice || "",
             totalCost: existingTrade.totalCost || "",
-            quantity: existingTrade.quantity || "",
+            quantity: existingTrade.openOtherDetails?.initialQty || existingTrade.quantity || "",
             sellPrice: existingTrade.sellPrice || "",
             quantitySold: existingTrade.quantitySold || "",
             strategyName: existingTrade.strategyName || "",
@@ -175,12 +175,8 @@ export const useTradeForm = ({ editMode = false, existingTrade, day, onRequestCl
             }
         }
 
-        // Calculate remaining quantity (original quantity - already sold in closeEvents)
-        const originalQty = Number(existingTrade?.quantity || baseData.quantity) || 0;
-        // Use form's closeEvents (from baseData) which is synced with Redux, not stale prop
-        const existingCloseEvents = baseData.closeEvents || existingTrade?.closeEvents || [];
-        const alreadySoldQty = existingCloseEvents.reduce((sum, event) => sum + (event.quantitySold || 0), 0);
-        const remainingQty = originalQty - alreadySoldQty;
+        // Remaining quantity is the current remaining holding quantity on existingTrade
+        const remainingQty = Number(existingTrade?.quantity || baseData.quantity) || 0;
         const currentSoldQty = Number(baseData.quantitySold) || 0;
 
         // Determine if this is a partial close

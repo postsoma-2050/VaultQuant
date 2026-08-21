@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { CalendarIcon, Info } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
@@ -94,6 +94,13 @@ export const AdjustPositionTab = ({
 
     const adjustQtyValue = watch("adjustQty");
     const adjustPriceValue = watch("adjustPrice");
+
+    useEffect(() => {
+        if (adjustQtyValue && String(adjustQtyValue).trim().startsWith("-")) {
+            setMode("reduce");
+            form.setValue("adjustQty", String(Math.abs(Number(adjustQtyValue))));
+        }
+    }, [adjustQtyValue, form]);
 
     // Real-time Live Preview Calculations
     const adjQty = Math.abs(Number(adjustQtyValue)) || 0;

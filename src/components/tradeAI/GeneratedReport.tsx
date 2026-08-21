@@ -10,6 +10,7 @@ import CustomLoading from "../CustomLoading";
 import AutoResizeTextarea from "@/features/archive/AutoResizeTextarea";
 import { useAppSelector } from "@/redux/store";
 
+import { useMarketPrices } from "@/hooks/useMarketPrices";
 import { Trades } from "@/types";
 
 type GeneratedReportType = {
@@ -43,22 +44,64 @@ export default function GeneratedReport({
         timeManagement: false,
     });
 
+    const openSymbols = useMemo(() => {
+        const open = (trades || []).filter((t) => !t.closeDate || t.closeDate === "");
+        return [...new Set(open.map((t) => t.symbolName).filter(Boolean))];
+    }, [trades]);
+
+    const { prices } = useMarketPrices(openSymbols);
+
     const activeOpenPositions = useMemo(() => {
-        if (openPositions && openPositions.length > 0) return openPositions;
-        if (report?.openPositions && report.openPositions.length > 0) return report.openPositions;
+        const basePositions = (openPositions && openPositions.length > 0)
+            ? openPositions
+            : (report?.openPositions && report.openPositions.length > 0)
+            ? report.openPositions
+            : null;
+
+        if (basePositions) {
+            return basePositions.map((pos) => {
+                const livePrice = prices[pos.symbolName] ?? pos.markPrice;
+                if (livePrice !== null && pos.entryPrice > 0 && pos.quantity > 0) {
+                    const isSell = pos.positionType === "sell";
+                    const unrealizedPnL = (livePrice - pos.entryPrice) * pos.quantity * (isSell ? -1 : 1);
+                    const unrealizedPnLPercent = ((livePrice - pos.entryPrice) / pos.entryPrice) * 100 * (isSell ? -1 : 1);
+                    const positionValue = livePrice * pos.quantity;
+                    return {
+                        ...pos,
+                        markPrice: livePrice,
+                        unrealizedPnL: Number(unrealizedPnL.toFixed(2)),
+                        unrealizedPnLPercent: Number(unrealizedPnLPercent.toFixed(2)),
+                        positionValue: Number(positionValue.toFixed(2)),
+                    };
+                }
+                return pos;
+            });
+        }
 
         const open = (trades || []).filter((t) => !t.closeDate || t.closeDate === "");
-        return open.map((t) => ({
-            symbolName: t.symbolName,
-            positionType: (t.positionType === "sell" ? "sell" : "buy") as "buy" | "sell",
-            entryPrice: Number(t.entryPrice) || 0,
-            markPrice: null,
-            quantity: Number(t.quantity) || 0,
-            unrealizedPnL: Number(t.result) || null,
-            unrealizedPnLPercent: null,
-            positionValue: null,
-        }));
-    }, [openPositions, report, trades]);
+        return open.map((t) => {
+            const entryPrice = Number(t.entryPrice) || 0;
+            const qty = Number(t.quantity) || 0;
+            const livePrice = prices[t.symbolName] ?? null;
+            const isSell = t.positionType === "sell";
+            const unrealizedPnL = (livePrice !== null && entryPrice > 0 && qty > 0)
+                ? (livePrice - entryPrice) * qty * (isSell ? -1 : 1)
+                : null;
+            const unrealizedPnLPercent = (livePrice !== null && entryPrice > 0)
+                ? ((livePrice - entryPrice) / entryPrice) * 100 * (isSell ? -1 : 1)
+                : null;
+            return {
+                symbolName: t.symbolName,
+                positionType: (t.positionType === "sell" ? "sell" : "buy") as "buy" | "sell",
+                entryPrice,
+                markPrice: livePrice,
+                quantity: qty,
+                unrealizedPnL: unrealizedPnL !== null ? Number(unrealizedPnL.toFixed(2)) : null,
+                unrealizedPnLPercent: unrealizedPnLPercent !== null ? Number(unrealizedPnLPercent.toFixed(2)) : null,
+                positionValue: livePrice !== null ? Number((livePrice * qty).toFixed(2)) : null,
+            };
+        });
+    }, [openPositions, report, trades, prices]);
 
     const activePortfolioSummary = portfolioSummary || report?.portfolioSummary || null;
 
