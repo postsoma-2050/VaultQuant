@@ -27,14 +27,8 @@ export function helperFunctionSP500vsYourReturns(
     const realisedEvents: RealisedEvent[] = [];
 
     for (const trade of trades) {
-        if (trade.closeDate && trade.closeDate !== "") {
-            // Fully-closed trade
-            realisedEvents.push({
-                closeDt: parseLocalDate(trade.closeDate),
-                result: parseFloat(trade.result || "0") || 0,
-            });
-        } else if (trade.closeEvents && trade.closeEvents.length > 0) {
-            // Open trade with partial exits – fold in each realised slice
+        if (trade.closeEvents && trade.closeEvents.length > 0) {
+            // Trade with adjustment/close events (each recorded on its actual date)
             for (const ev of trade.closeEvents) {
                 const evResult = ev.result || 0;
                 if (evResult === 0 || !ev.date) continue;
@@ -43,6 +37,12 @@ export function helperFunctionSP500vsYourReturns(
                     result: evResult,
                 });
             }
+        } else if (trade.closeDate && trade.closeDate !== "") {
+            // Legacy fully-closed trade without closeEvents
+            realisedEvents.push({
+                closeDt: parseLocalDate(trade.closeDate),
+                result: parseFloat(trade.result || "0") || 0,
+            });
         }
     }
 

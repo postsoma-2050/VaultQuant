@@ -13,7 +13,7 @@ import { TradeDialog } from "../trade-dialog";
 import { Sheet, SheetContent, SheetTrigger } from "../ui/sheet";
 import { getPlural } from "@/lib/utils";
 import { TradeList } from "./TradeList";
-import { getClosedTradesForDay } from "@/features/calendar/getClosedTradesForDay";
+import { getClosedTradesForDay, getOpenTradesForDay } from "@/features/calendar/getClosedTradesForDay";
 import { useEffect, useState } from "react";
 import { getJournalDates } from "@/server/actions/journal";
 import { FileText } from "lucide-react";
@@ -264,22 +264,21 @@ export default function MonthView() {
                                                         )}
                                                     </div>
                                                 </HoverCardTrigger>
-                                                <HoverCardContent className="w-[420px] space-y-4 px-3 py-2">
-                                                    <TradeList
-                                                        displayItems={getClosedTradesForDay(allTrades, day.format("DD-MM-YYYY"))}
-                                                        title="Closed Trades"
-                                                        type="closed"
-                                                    />
-                                                    <TradeList
-                                                        trades={allTrades.filter(
-                                                            (t) =>
-                                                                (!t.closeDate || t.closeDate === "") &&
-                                                                dayjs(t.openDate).format("DD-MM-YYYY") ===
-                                                                day.format("DD-MM-YYYY")
-                                                        )}
-                                                        title="Open Trades"
-                                                        type="open"
-                                                    />
+                                                <HoverCardContent className="w-[420px] space-y-3 p-3">
+                                                    {getClosedTradesForDay(allTrades, day.format("DD-MM-YYYY")).length > 0 && (
+                                                        <TradeList
+                                                            displayItems={getClosedTradesForDay(allTrades, day.format("DD-MM-YYYY"))}
+                                                            title="Adjustments & Closes"
+                                                            type="closed"
+                                                        />
+                                                    )}
+                                                    {getOpenTradesForDay(allTrades, day.format("DD-MM-YYYY")).length > 0 && (
+                                                        <TradeList
+                                                            displayItems={getOpenTradesForDay(allTrades, day.format("DD-MM-YYYY"))}
+                                                            title="Initial Opens"
+                                                            type="open"
+                                                        />
+                                                    )}
                                                 </HoverCardContent>
                                             </HoverCard>
                                         )}

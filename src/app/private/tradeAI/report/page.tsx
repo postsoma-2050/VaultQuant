@@ -6,7 +6,6 @@ import { getAIReport } from "@/features/ai/getAiReport";
 import { useAppSelector } from "@/redux/store";
 import { ApiResponse, ReportType, OpenPositionPayload, PortfolioRiskSummary } from "@/types/tradeAI.types";
 import { Trades } from "@/types";
-import { CloseEvent } from "@/types/dbSchema.types";
 import { toast } from "sonner";
 import ReportPage from "@/components/tradeAI/ReportPage";
 import { useMarketPrices } from "@/hooks/useMarketPrices";

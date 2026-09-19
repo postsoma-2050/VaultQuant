@@ -1,66 +1,111 @@
 import { Trades } from "@/types";
 import dayjs from "dayjs";
 
-// A unified display item for the calendar TradeList - can be a trade or a partial close
+export type CalendarEventType = "open" | "add" | "reduce" | "close";
+
+// A unified display item for the calendar TradeList - supports open, add, reduce, close
 export interface TradeDisplayItem {
     id: string;
+    tradeId: string;
     symbolName: string;
     positionType: string;
+    eventType: CalendarEventType;
     quantity?: string | number;
-    entryPrice?: string;
-    result: number;
-    isPartialClose: boolean;
-    // Reference to the original trade (for opening the edit dialog)
+    entryPrice?: string | number;
+    price?: string | number;
+    result?: number;
+    time?: string;
+    isPartialClose?: boolean;
     originalTrade: Trades;
 }
 
 /**
- * Get all close events (partial + final) that happened on a specific day
+ * Get all trade events (Open, Add, Reduce, Close) that happened on a specific day
  */
-export function getClosedTradesForDay(
+export function getCalendarEventsForDay(
     allTrades: Trades[],
     dayKey: string // format: "DD-MM-YYYY"
 ): TradeDisplayItem[] {
     const items: TradeDisplayItem[] = [];
 
     for (const trade of allTrades) {
-        // Check partial closes (closeEvents)
+        // 1. Initial Open Event
+        if (trade.openDate) {
+            const openDayKey = dayjs(trade.openDate).format("DD-MM-YYYY");
+            if (openDayKey === dayKey) {
+                const initQty = trade.openOtherDetails?.initialQty || trade.quantity;
+                const initPrice = trade.openOtherDetails?.initialEntryPrice || trade.entryPrice;
+                items.push({
+                    id: `open-${trade.id}`,
+                    tradeId: trade.id,
+                    symbolName: trade.symbolName,
+                    positionType: trade.positionType,
+                    eventType: "open",
+                    quantity: initQty,
+                    entryPrice: initPrice,
+                    price: initPrice,
+                    result: undefined,
+                    time: trade.openTime || "00:00",
+                    isPartialClose: false,
+                    originalTrade: trade,
+                });
+            }
+        }
+
+        // 2. Adjustment Events (from closeEvents: add, reduce, close)
         if (trade.closeEvents && trade.closeEvents.length > 0) {
-            for (const event of trade.closeEvents) {
+            for (let i = 0; i < trade.closeEvents.length; i++) {
+                const event = trade.closeEvents[i];
                 if (!event.date) continue;
                 const eventDayKey = dayjs(event.date).format("DD-MM-YYYY");
                 if (eventDayKey === dayKey) {
+                    const qChange = event.quantityChange !== undefined 
+                        ? event.quantityChange 
+                        : (event.quantitySold !== undefined ? -event.quantitySold : 0);
+                    const evQty = Math.abs(qChange > 0 ? qChange : (event.quantitySold || qChange));
+                    const evPrice = event.price ?? event.sellPrice ?? trade.entryPrice;
+                    
+                    let detType: CalendarEventType = "reduce";
+                    if (event.eventType) {
+                        detType = event.eventType;
+                    } else if (qChange > 0) {
+                        detType = "add";
+                    }
+
                     items.push({
-                        id: `${trade.id}-${event.id}`,
+                        id: event.id || `event-${trade.id}-${i}`,
+                        tradeId: trade.id,
                         symbolName: trade.symbolName,
                         positionType: trade.positionType,
-                        quantity: event.quantitySold,
+                        eventType: detType,
+                        quantity: evQty,
                         entryPrice: trade.entryPrice,
+                        price: evPrice,
                         result: event.result,
-                        isPartialClose: true,
+                        time: event.time || "00:00",
+                        isPartialClose: detType === "reduce",
                         originalTrade: trade,
                     });
                 }
             }
-        }
-
-        // Check final close
-        if (trade.closeDate) {
+        } else if (trade.closeDate) {
+            // 3. Legacy Final Close (without closeEvents array)
             const closeDayKey = dayjs(trade.closeDate).format("DD-MM-YYYY");
             if (closeDayKey === dayKey) {
                 const numericResult = Number(trade.result);
-                // Only include if there's a valid result (non-zero for trades with partials)
                 if (Number.isFinite(numericResult) && numericResult !== 0) {
-                    // Determine if this is a partial close (has closeEvents but still closing remaining)
-                    const hasPartials = trade.closeEvents && trade.closeEvents.length > 0;
                     items.push({
-                        id: trade.id,
+                        id: `close-${trade.id}`,
+                        tradeId: trade.id,
                         symbolName: trade.symbolName,
                         positionType: trade.positionType,
+                        eventType: "close",
                         quantity: trade.quantitySold || trade.quantity,
                         entryPrice: trade.entryPrice,
+                        price: trade.sellPrice || trade.entryPrice,
                         result: numericResult,
-                        isPartialClose: hasPartials || false, // Mark as partial if it had previous partials
+                        time: trade.closeTime || "00:00",
+                        isPartialClose: false,
                         originalTrade: trade,
                     });
                 }
@@ -68,20 +113,29 @@ export function getClosedTradesForDay(
         }
     }
 
+    // Sort chronologically by time
+    items.sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+
     return items;
 }
 
 /**
- * Get trades that are final closes (fully closed trades) on a specific day
- * This is used for the legacy TradeList that expects Trades[]
+ * Backward-compatible helper for retrieving closed/adjustment events for a day
  */
-export function getFinalClosedTradesForDay(
+export function getClosedTradesForDay(
     allTrades: Trades[],
     dayKey: string
-): Trades[] {
-    return allTrades.filter((t) => {
-        if (!t.closeDate) return false;
-        const closeDayKey = dayjs(t.closeDate).format("DD-MM-YYYY");
-        return closeDayKey === dayKey;
-    });
+): TradeDisplayItem[] {
+    return getCalendarEventsForDay(allTrades, dayKey).filter((e) => e.eventType !== "open");
 }
+
+/**
+ * Backward-compatible helper for retrieving open events for a day
+ */
+export function getOpenTradesForDay(
+    allTrades: Trades[],
+    dayKey: string
+): TradeDisplayItem[] {
+    return getCalendarEventsForDay(allTrades, dayKey).filter((e) => e.eventType === "open");
+}
+

@@ -105,7 +105,7 @@ const HomePageFooter = () => {
                                     How does Campaign VWAP Clustering work?
                                 </AccordionTrigger>
                                 <AccordionContent className="text-zinc-500 text-base leading-relaxed pb-6">
-                                    Instead of logging dozens of individual fill rows, VaultQuant's Campaign Engine groups multiple scale-in buys into a unified average position price (VWAP) and matches scale-out sells into clean trade cards with exact net PnL calculations.
+                                    Instead of logging dozens of individual fill rows, VaultQuant&apos;s Campaign Engine groups multiple scale-in buys into a unified average position price (VWAP) and matches scale-out sells into clean trade cards with exact net PnL calculations.
                                 </AccordionContent>
                             </AccordionItem>
                         </Accordion>

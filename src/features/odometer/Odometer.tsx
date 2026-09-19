@@ -15,7 +15,6 @@ const Odometer: React.FC<OdometerProps> = ({
     height,
     width,
     labelText,
-    labelSize,
 }) => {
     const isNegative = end < 0;
     const absEnd = isNaN(end) ? 0 : Math.abs(end);

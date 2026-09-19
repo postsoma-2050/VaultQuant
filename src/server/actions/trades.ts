@@ -36,9 +36,9 @@ function processTradeRow(trade: typeof TradeTable.$inferSelect): Trades {
 }
 
 export async function createNewTradeRecord(
-    unsafeData: z.infer<typeof newTradeFormSchema>,
+    unsafeData: z.input<typeof newTradeFormSchema>,
     id: string
-): Promise<{ error: boolean } | undefined> {
+): Promise<{ error: boolean; message?: string } | undefined> {
     const userId = "local-user";
     await ensureLocalUser();
 
@@ -62,11 +62,37 @@ export async function createNewTradeRecord(
     }
 
     try {
+        if (!data.closeDate || data.closeDate === "") {
+            const cleanSym = data.symbolName.trim().toUpperCase();
+            const posType = data.positionType.toLowerCase();
+
+            const existingTrades = await db
+                .select()
+                .from(TradeTable)
+                .where(eq(TradeTable.userId, userId));
+
+            const existingActive = existingTrades.find((t) => {
+                const isActive = t.isActiveTrade !== false && (!t.closeDate || t.closeDate === "");
+                return isActive &&
+                       (t.symbolName || "").trim().toUpperCase() === cleanSym &&
+                       (t.positionType || "").toLowerCase() === posType;
+            });
+
+            if (existingActive) {
+                return {
+                    error: true,
+                    message: `An active position for ${cleanSym} (${posType === 'buy' ? 'Long' : 'Short'}) already exists. Please adjust the existing position.`
+                };
+            }
+        }
+
         await db.insert(TradeTable).values({ ...data, notes, userId, id });
-        revalidatePath("/private/history");
+        try {
+            revalidatePath("/private/history");
+        } catch {}
     } catch (err) {
         console.error("Error creating trade:", err);
-        return { error: true };
+        return { error: true, message: "Internal error creating trade." };
     }
 }
 
@@ -226,12 +252,12 @@ export async function adjustTradePosition(
     tradeId: string,
     unsafeData: z.infer<typeof adjustPositionSchema>,
     extraFields?: Partial<Trades>
-): Promise<{ error: boolean; updatedTrade?: Trades } | undefined> {
+): Promise<{ error: boolean; message?: string; updatedTrade?: Trades } | undefined> {
     await ensureLocalUser();
 
     const { success, data } = adjustPositionSchema.safeParse(unsafeData);
     if (!success) {
-        return { error: true };
+        return { error: true, message: "Invalid input data." };
     }
 
     try {
@@ -242,7 +268,26 @@ export async function adjustTradePosition(
             .where(eq(TradeTable.id, tradeId));
 
         if (!existingTrade) {
-            return { error: true };
+            return { error: true, message: "Trade not found." };
+        }
+
+        // Validate active status
+        if (existingTrade.isActiveTrade === false || (existingTrade.closeDate && existingTrade.closeDate !== "")) {
+            return { error: true, message: "Cannot adjust a closed position." };
+        }
+
+        const currentLiveQty = Number(existingTrade.quantity || "0");
+        const adjustQty = Number(data.adjustQty);
+        const adjustPrice = Number(data.adjustPrice);
+        const adjustDate = data.adjustDate;
+        const adjustTime = data.adjustTime;
+
+        if (adjustPrice <= 0) {
+            return { error: true, message: "Price must be greater than 0." };
+        }
+
+        if (adjustQty < 0 && Math.abs(adjustQty) > currentLiveQty + 0.000001) {
+            return { error: true, message: `Cannot reduce more than current position size (${currentLiveQty}).` };
         }
 
         // Merge extraFields (except closeEvents) into existingTrade to support updating other fields
@@ -264,10 +309,9 @@ export async function adjustTradePosition(
                 return sum + qChange;
             }, 0);
 
-            const currentQty = Number(mergedTrade.quantity || "0");
-            const computedInitialQty = currentQty - existingEventsQtyChange;
+            const computedInitialQty = currentLiveQty - existingEventsQtyChange;
 
-            initialQtyStr = String(computedInitialQty > 0 ? computedInitialQty : currentQty);
+            initialQtyStr = String(computedInitialQty > 0 ? computedInitialQty : currentLiveQty);
             initialEntryPriceStr = mergedTrade.entryPrice || "0";
 
             openOtherDetails = {
@@ -281,16 +325,18 @@ export async function adjustTradePosition(
         const initialEntryPrice = Number(initialEntryPriceStr);
 
         // 3. Construct the new adjustment event
-        const adjustQty = Number(data.adjustQty);
-        const adjustPrice = Number(data.adjustPrice);
-        const adjustDate = data.adjustDate;
-        const adjustTime = data.adjustTime;
-
-        // Calculate realized P/L (only for scale-out: adjustQty < 0)
         let realizedPnL = 0;
-        if (adjustQty < 0) {
+        let determinedEventType: "add" | "reduce" | "close" = "add";
+
+        if (adjustQty > 0) {
+            determinedEventType = "add";
+        } else {
             const currentAvgEntry = Number(mergedTrade.entryPrice || 0);
-            realizedPnL = (adjustPrice - currentAvgEntry) * Math.abs(adjustQty) * (mergedTrade.positionType === "buy" ? 1 : -1);
+            const isBuy = mergedTrade.positionType === "buy";
+            realizedPnL = (adjustPrice - currentAvgEntry) * Math.abs(adjustQty) * (isBuy ? 1 : -1);
+
+            const isClosing = Math.abs(adjustQty) >= currentLiveQty - 0.000001;
+            determinedEventType = data.eventType || (isClosing ? "close" : "reduce");
         }
 
         const newEvent = {
@@ -299,7 +345,8 @@ export async function adjustTradePosition(
             time: adjustTime,
             quantityChange: adjustQty,
             price: adjustPrice,
-            result: adjustQty < 0 ? realizedPnL : 0, // Store 0 instead of undefined so it is parsed as number
+            result: adjustQty < 0 ? Number(realizedPnL.toFixed(2)) : 0,
+            eventType: determinedEventType,
             // compatibility fields:
             quantitySold: adjustQty < 0 ? Math.abs(adjustQty) : 0,
             sellPrice: adjustQty < 0 ? adjustPrice : 0,
@@ -316,22 +363,23 @@ export async function adjustTradePosition(
             const eventPrice = event.price !== undefined ? event.price : (event.sellPrice !== undefined ? event.sellPrice : 0);
 
             if (qChange > 0) {
-                // scale-in: recalculate VWAP average entry price
+                // scale-in (add): recalculate VWAP average entry price
                 const newQty = qty + qChange;
                 price = newQty > 0 ? (price * qty + eventPrice * qChange) / newQty : price;
                 qty = newQty;
             } else if (qChange < 0) {
-                // scale-out: reduces remaining qty, average entry price is unchanged
+                // scale-out (reduce/close): reduces remaining qty, average entry price is unchanged
                 qty = qty + qChange;
             }
         }
 
         const updatedDeposit = qty * price;
-        const isClosed = qty <= 0;
+        const isClosed = qty <= 0.000001;
+        const finalCleanQty = isClosed ? 0 : Number(qty.toFixed(8));
 
         const updatedFields = {
             ...extraFields,
-            quantity: qty.toString(),
+            quantity: finalCleanQty.toString(),
             entryPrice: price.toString(),
             closeEvents: updatedEvents,
             isActiveTrade: !isClosed,
@@ -342,7 +390,7 @@ export async function adjustTradePosition(
             closeTime: isClosed ? adjustTime : null,
             sellPrice: isClosed ? adjustPrice.toString() : null,
             quantitySold: isClosed ? initialQty.toString() : null,
-            result: isClosed ? updatedEvents.reduce((sum, e) => sum + (e.result || 0), 0).toString() : null,
+            result: isClosed ? Number(updatedEvents.reduce((sum, e) => sum + (e.result || 0), 0).toFixed(2)).toString() : null,
         };
 
         await db
@@ -350,7 +398,11 @@ export async function adjustTradePosition(
             .set(updatedFields)
             .where(eq(TradeTable.id, tradeId));
 
-        revalidatePath("/private/history");
+        try {
+            revalidatePath("/private/history");
+        } catch {
+            // Context outside HTTP request (e.g. tests/scripts)
+        }
 
         const [updatedRawTrade] = await db
             .select()
@@ -361,7 +413,7 @@ export async function adjustTradePosition(
         return { error: false, updatedTrade };
     } catch (err) {
         console.error("Error adjusting position:", err);
-        return { error: true };
+        return { error: true, message: "Internal error adjusting position." };
     }
 }
 
@@ -441,7 +493,11 @@ export async function deletePositionEvent(
         };
 
         await db.update(TradeTable).set(updatedFields).where(eq(TradeTable.id, tradeId));
-        revalidatePath("/private/history");
+        try {
+            revalidatePath("/private/history");
+        } catch {
+            // Context outside HTTP request (e.g. tests/scripts)
+        }
 
         const [updatedRawTrade] = await db.select().from(TradeTable).where(eq(TradeTable.id, tradeId));
         const updatedTrade = processTradeRow(updatedRawTrade);

@@ -39,10 +39,6 @@ p {
     font-size: 0.8rem;
 }
 
-.mobile-navbar-shadow {
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-}
-
 .orange-background {
     background: linear-gradient(to right,
             rgb(253, 90, 36),
@@ -277,18 +273,6 @@ mark::after {
 
 /* End of Calendar Section */
 
-/* Mobile navigation */
-
-.mobile-nav-link {
-    /* padding: 18px; */
-    margin: 24px 18px;
-}
-
-/* End of Mobile navigation */
-
-.test {
-    background-image: url("/nav/test-2.png");
-}
 
 .main-text {
     @apply bg-gradient-to-br from-zinc-800 via-zinc-600 to-zinc-950 font-bold text-transparent bg-clip-text;

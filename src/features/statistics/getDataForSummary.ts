@@ -36,16 +36,8 @@ export function getDataForSummaryChartGridPageOne(
 
     // Traverse trades to collect individual close events (transaction level)
     for (const trade of trades) {
-        if (trade.closeDate && trade.closeDate !== "") {
-            // Fully-closed trade
-            realisedEvents.push({
-                date: parseLocalDate(trade.closeDate, trade.closeTime || "00:00"),
-                timeStr: trade.closeTime || "00:00",
-                result: parseFloat(trade.result as unknown as string) || 0,
-                symbolName: trade.symbolName,
-            });
-        } else if (trade.closeEvents && trade.closeEvents.length > 0) {
-            // Open trade with partial close events
+        if (trade.closeEvents && trade.closeEvents.length > 0) {
+            // Trade with adjustment/close events (each recorded on its actual date)
             for (const ev of trade.closeEvents) {
                 const evResult = ev.result || 0;
                 if (evResult === 0 || !ev.date) continue;
@@ -56,6 +48,14 @@ export function getDataForSummaryChartGridPageOne(
                     symbolName: trade.symbolName,
                 });
             }
+        } else if (trade.closeDate && trade.closeDate !== "") {
+            // Legacy fully-closed trade without closeEvents
+            realisedEvents.push({
+                date: parseLocalDate(trade.closeDate, trade.closeTime || "00:00"),
+                timeStr: trade.closeTime || "00:00",
+                result: parseFloat(trade.result as unknown as string) || 0,
+                symbolName: trade.symbolName,
+            });
         }
     }
 

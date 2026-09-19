@@ -1,14 +1,14 @@
 import { Trades } from "@/types";
+import dayjs from "dayjs";
 
-function getDateKey(date: Date, groupBy: "day" | "month" | "year" | "total"): string {
+function getDateKey(dateInput: string | Date, groupBy: "day" | "month" | "year" | "total"): string {
+    const d = dayjs(dateInput);
     if (groupBy === "year") {
-        return date.getFullYear().toString();
+        return d.format("YYYY");
     } else if (groupBy === "month") {
-        const month = (date.getMonth() + 1).toString();
-        const year = date.getFullYear().toString();
-        return `${month}-${year}`;
+        return `${d.month() + 1}-${d.year()}`;
     } else if (groupBy === "day") {
-        return date.toLocaleDateString("en-GB").split("/").join("-");
+        return d.format("DD-MM-YYYY");
     } else {
         return "total";
     }
@@ -27,22 +27,18 @@ export function getTradeSummary(
     data: Trades[]
 ): { [key: string]: number } {
     return data.reduce((acc: { [key: string]: number }, trade) => {
-        // Process partial closes (closeEvents) - each on its own date
+        // Process partial closes and adjustments (closeEvents) - each on its own date
         if (trade.closeEvents && trade.closeEvents.length > 0) {
             for (const event of trade.closeEvents) {
-                if (!event.date || !Number.isFinite(event.result)) continue;
-                const eventDate = new Date(event.date);
-                const dateKey = getDateKey(eventDate, groupBy);
+                if (!event.date || event.result === undefined || !Number.isFinite(event.result)) continue;
+                const dateKey = getDateKey(event.date, groupBy);
                 addToAccumulator(acc, dateKey, event.result);
             }
-        }
-
-        // Process final close (if trade is fully closed with closeDate and result)
-        if (trade.closeDate) {
+        } else if (trade.closeDate) {
+            // Legacy close without closeEvents
             const numericResult = Number(trade.result);
             if (Number.isFinite(numericResult) && numericResult !== 0) {
-                const closeDate = new Date(trade.closeDate);
-                const dateKey = getDateKey(closeDate, groupBy);
+                const dateKey = getDateKey(trade.closeDate, groupBy);
                 addToAccumulator(acc, dateKey, numericResult);
             }
         }

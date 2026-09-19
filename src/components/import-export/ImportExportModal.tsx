@@ -8,7 +8,7 @@ import { setListOfTrades, setInitialMonthViewSummary, setInitialYearViewSummary,
 import { getTradeSummary } from "@/features/calendar/getTradeSummary";
 import { getTradeDetailsForEachDay } from "@/features/calendar/getTradeDetailsForEachDay";
 import { getAllTradeRecords } from "@/server/actions/trades";
-import { Upload, Download, FileText, CheckCircle2, Loader2, X, Eye, RefreshCw, AlertCircle } from "lucide-react";
+import { Upload, Download, FileText, CheckCircle2, Loader2, X, Eye } from "lucide-react";
 
 interface ImportExportModalProps {
     isOpen: boolean;
@@ -45,9 +45,10 @@ export default function ImportExportModal({ isOpen, onClose }: ImportExportModal
                 toast.error(preview.error || "Failed to preview file");
                 setPreviewData(null);
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Preview error:", err);
-            toast.error("File preview error: " + (err.message || "Unknown error"));
+            const msg = err instanceof Error ? err.message : "Unknown error";
+            toast.error("File preview error: " + msg);
             setPreviewData(null);
         } finally {
             setIsLoading(false);
@@ -118,9 +119,10 @@ export default function ImportExportModal({ isOpen, onClose }: ImportExportModal
             } else {
                 toast.error(result.error || "Failed to import file. Please check file format.");
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Import error:", err);
-            toast.error("Import error: " + (err.message || "Unknown error"));
+            const msg = err instanceof Error ? err.message : "Unknown error";
+            toast.error("Import error: " + msg);
         } finally {
             setIsLoading(false);
             setProgressStatus("");
@@ -140,8 +142,9 @@ export default function ImportExportModal({ isOpen, onClose }: ImportExportModal
             link.click();
             document.body.removeChild(link);
             toast.success("CSV trades export completed!");
-        } catch (err: any) {
-            toast.error("Failed to export CSV: " + err.message);
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : "Unknown error";
+            toast.error("Failed to export CSV: " + msg);
         } finally {
             setIsLoading(false);
         }
@@ -160,8 +163,9 @@ export default function ImportExportModal({ isOpen, onClose }: ImportExportModal
             link.click();
             document.body.removeChild(link);
             toast.success("Full JSON backup export completed!");
-        } catch (err: any) {
-            toast.error("Failed to export JSON backup: " + err.message);
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : "Unknown error";
+            toast.error("Failed to export JSON backup: " + msg);
         } finally {
             setIsLoading(false);
         }

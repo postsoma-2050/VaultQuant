@@ -1,21 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { BookOpen, Trash2, ChevronDown, ChevronRight, RefreshCw, XCircle } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { BookOpen, Trash2, ChevronDown, ChevronRight, RefreshCw, XCircle, PlusCircle, MinusCircle, Pencil, Layers, Calendar } from "lucide-react";
 import { FaArrowTrendDown, FaArrowTrendUp } from "react-icons/fa6";
 
 import { Trades } from "@/types";
-import { CloseEvent } from "@/types/dbSchema.types";
 import {
-    HoverCard,
-    HoverCardContent,
-    HoverCardTrigger,
-} from "@/components/ui/hover-card";
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
 import { TradeDialog } from "../trade-dialog";
 import DeleteTradeDialog from "./DeleteTradeDialog";
 import { useDeleteOpenTrade } from "@/hooks/useDeleteOpenTrade";
-import { Sheet, SheetContent, SheetTrigger } from "../ui/sheet";
-import EditTrade from "./EditTrade";
+import { Sheet, SheetContent } from "../ui/sheet";
 import { parseTradeNotes } from "@/lib/tradeNotes";
 import dayjs from "dayjs";
 import { useMarketPrices } from "@/hooks/useMarketPrices";
@@ -24,6 +22,10 @@ import { useAppDispatch } from "@/redux/store";
 import { updateTradeInList } from "@/redux/slices/tradeRecordsSlice";
 import { updateTradeInFilteredList } from "@/redux/slices/historyPageSlice";
 import { toast } from "sonner";
+import {
+    aggregateOpenPositions,
+    calculatePositionPnL,
+} from "@/features/positions/aggregatePositions";
 
 type OpenTradesTableProps = {
     trades: Trades[];
@@ -41,12 +43,12 @@ const formatPrice = (price: number | string): string => {
     if (Math.abs(num) >= 1) {
         return num.toLocaleString("en-US", {
             minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
+            maximumFractionDigits: 4,
         });
     }
     return num.toLocaleString("en-US", {
         minimumFractionDigits: 2,
-        maximumFractionDigits: 4,
+        maximumFractionDigits: 6,
     });
 };
 
@@ -57,42 +59,26 @@ const formatCurrency = (val: number): string => {
     });
 };
 
-// Helper to calculate remaining quantity
-const getRemainingQty = (trade: Trades): number => {
-    return Number(trade.quantity) || 0;
-};
-
-// Helper to calculate initial quantity before scale-outs
-const getInitialQty = (trade: Trades): number => {
-    if (trade.openOtherDetails?.initialQty) {
-        const initNum = Number(trade.openOtherDetails.initialQty);
-        if (!isNaN(initNum) && initNum > 0) return initNum;
-    }
-    const closeEvents = trade.closeEvents || [];
-    const soldQty = closeEvents.reduce(
-        (sum, event) => sum + (Number(event.quantitySold) || Number((event as any).qty) || 0),
-        0
-    );
-    return (Number(trade.quantity) || 0) + soldQty;
-};
-
-// Helper to calculate partial close total P/L
-const getPartialClosesTotal = (trade: Trades): number => {
-    const closeEvents = trade.closeEvents || [];
-    return closeEvents.reduce((sum, event) => sum + (event.result || 0), 0);
-};
-
 export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
     const dispatch = useAppDispatch();
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [tradeToDelete, setTradeToDelete] = useState<Trades | null>(null);
-    const [expandedTradeId, setExpandedTradeId] = useState<string | null>(null);
-    const [openSheetTradeId, setOpenSheetTradeId] = useState<string | null>(null);
-    const [openAdjustSheetTradeId, setOpenAdjustSheetTradeId] = useState<string | null>(null);
+    const [expandedPositionKey, setExpandedPositionKey] = useState<string | null>(null);
+    const [openManageMenuKey, setOpenManageMenuKey] = useState<string | null>(null);
+    const [adjustSheetState, setAdjustSheetState] = useState<{ trade: Trades; mode: "add" | "reduce" | "close" } | null>(null);
+    const [editInitialTrade, setEditInitialTrade] = useState<Trades | null>(null);
+    const [tradeNotesTrade, setTradeNotesTrade] = useState<Trades | null>(null);
     const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
     const { handleDeleteOpenTrade } = useDeleteOpenTrade();
 
-    const symbols = [...new Set((trades || []).map((t) => t.symbolName).filter(Boolean))];
+    const aggregatedPositions = useMemo(() => {
+        return aggregateOpenPositions(trades || []);
+    }, [trades]);
+
+    const symbols = useMemo(() => {
+        return [...new Set(aggregatedPositions.map((p) => p.symbolName))];
+    }, [aggregatedPositions]);
+
     const { prices, loading, lastUpdated } = useMarketPrices(symbols);
     const [relativeTime, setRelativeTime] = useState("Just now");
 
@@ -116,11 +102,11 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
         return () => clearInterval(interval);
     }, [lastUpdated]);
 
-    const toggleExpanded = (tradeId: string) => {
-        setExpandedTradeId(expandedTradeId === tradeId ? null : tradeId);
+    const toggleExpanded = (key: string) => {
+        setExpandedPositionKey(expandedPositionKey === key ? null : key);
     };
 
-    if (!trades || trades.length === 0) {
+    if (!aggregatedPositions || aggregatedPositions.length === 0) {
         return (
             <div className="border border-zinc-200/80 rounded-xl p-8 text-center text-zinc-500 bg-white shadow-xs">
                 No open trades yet
@@ -128,44 +114,37 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
         );
     }
 
-    // Header totals calculation
-    const { totalUnrealizedPnL, totalPositionValue, totalPositionCost } = (trades || []).reduce(
-        (acc, trade) => {
-            const remainingQty = getRemainingQty(trade);
-            const entryPrice = Number(trade.entryPrice) || 0;
-            const currentPrice = prices[trade.symbolName] ?? null;
-            const cost = entryPrice * remainingQty;
-            acc.totalPositionCost += cost;
+    let totalPositionCost = 0;
+    let totalPositionValue = 0;
+    let totalUnrealizedPnL = 0;
 
-            if (currentPrice !== null && !isNaN(entryPrice) && entryPrice > 0 && remainingQty > 0) {
-                const pnl = (currentPrice - entryPrice) * remainingQty * (trade.positionType === "buy" ? 1 : -1);
-                acc.totalUnrealizedPnL += pnl;
-                acc.totalPositionValue += currentPrice * remainingQty;
-            } else {
-                acc.totalPositionValue += cost;
-            }
-            return acc;
-        },
-        { totalUnrealizedPnL: 0, totalPositionValue: 0, totalPositionCost: 0 }
-    );
+    for (const pos of aggregatedPositions) {
+        const markPrice = prices[pos.symbolName] ?? null;
+        const { pnl, marketValue } = calculatePositionPnL(pos, markPrice);
+        totalPositionCost += pos.totalCost;
+        totalPositionValue += marketValue;
+        if (pnl !== null) {
+            totalUnrealizedPnL += pnl;
+        }
+    }
 
     const totalROIPercent = totalPositionCost > 0 ? (totalUnrealizedPnL / totalPositionCost) * 100 : 0;
 
     return (
         <div className="flex flex-col gap-4 pt-4">
-            {/* Header Cards (3 Modular Metrics Cards) */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Card 1: Open Positions */}
                 <div className="border border-zinc-200/80 rounded-xl p-4 bg-white shadow-xs hover:border-zinc-300 transition-colors">
                     <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Open Positions</p>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Active Positions</p>
                         <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200/60">
                             <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                            Active
+                            Unified
                         </span>
                     </div>
                     <div className="flex items-baseline gap-2 mt-2">
-                        <p className="text-2xl font-bold text-zinc-800 font-mono tabular-nums">{trades.length}</p>
+                        <p className="text-2xl font-bold text-zinc-800 font-mono tabular-nums">
+                            {aggregatedPositions.length}
+                        </p>
                         <div className="flex items-center gap-1 text-[11px] text-zinc-400 font-medium">
                             <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin text-blue-500" : ""}`} />
                             <span>
@@ -175,7 +154,6 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
                     </div>
                 </div>
 
-                {/* Card 2: Total Position Value */}
                 <div className="border border-zinc-200/80 rounded-xl p-4 bg-white shadow-xs hover:border-zinc-300 transition-colors">
                     <div className="flex items-center justify-between">
                         <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Total Position Value</p>
@@ -188,7 +166,6 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
                     </p>
                 </div>
 
-                {/* Card 3: Total Unrealized P/L & Total ROI % */}
                 <div className="border border-zinc-200/80 rounded-xl p-4 bg-white shadow-xs hover:border-zinc-300 transition-colors">
                     <div className="flex items-center justify-between">
                         <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Total Unrealized P/L</p>
@@ -208,58 +185,39 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
                 </div>
             </div>
 
-            {/* Trades List Table */}
             <div className="border border-zinc-200/80 rounded-xl bg-white overflow-hidden shadow-xs w-full max-w-none">
-                {/* Header - Fixed 12 columns */}
                 <div className="grid grid-cols-12 gap-2 px-4 py-3 bg-zinc-50/80 border-b border-zinc-200 text-xs font-semibold uppercase tracking-wider text-zinc-500 w-full">
-                    <div className="col-span-5 md:col-span-3">Symbol</div>
-                    <div className="col-span-2 text-center hidden md:block">Entry Price</div>
+                    <div className="col-span-5 md:col-span-3">Position / Symbol</div>
+                    <div className="col-span-2 text-center hidden md:block">Avg Entry (VWAP)</div>
                     <div className="col-span-2 text-center hidden md:block">Mark Price</div>
-                    <div className="col-span-1 text-center hidden md:block">Qty</div>
+                    <div className="col-span-1 text-center hidden md:block">Total Qty</div>
                     <div className="col-span-4 md:col-span-2 text-center">Unreal. P&L (%)</div>
                     <div className="col-span-3 md:col-span-2 text-right">Actions</div>
                 </div>
 
-                {/* Body - Scrollable */}
                 <div className="max-h-[65vh] overflow-y-auto divide-y divide-zinc-100 w-full">
-                    {trades.map((trade) => {
-                        const closeEvents = trade.closeEvents || [];
-                        const hasPartials = closeEvents.length > 0;
-                        const isExpanded = expandedTradeId === trade.id;
-                        const remainingQty = getRemainingQty(trade);
-                        const partialTotal = getPartialClosesTotal(trade);
-
-                        const entryPrice = Number(trade.entryPrice);
-                        const currentPrice = prices[trade.symbolName] ?? null;
-
-                        let pnl: number | null = null;
-                        let pnlPercent: number | null = null;
-
-                        if (currentPrice !== null && !isNaN(entryPrice) && entryPrice > 0 && remainingQty > 0) {
-                            const isBuy = trade.positionType === "buy";
-                            pnl = (currentPrice - entryPrice) * remainingQty * (isBuy ? 1 : -1);
-                            pnlPercent = ((currentPrice - entryPrice) / entryPrice) * 100 * (isBuy ? 1 : -1);
-                        }
+                    {aggregatedPositions.map((pos) => {
+                        const isExpanded = expandedPositionKey === pos.key;
+                        const currentPrice = prices[pos.symbolName] ?? null;
+                        const { pnl, pnlPercent } = calculatePositionPnL(pos, currentPrice);
+                        const isBuy = pos.positionType === "buy";
+                        const primaryTrade = pos.primaryTrade;
 
                         return (
-                            <div key={trade.id} className="hover:bg-zinc-50/80 transition-colors w-full">
-                                {/* Main Row */}
+                            <div key={pos.key} className="hover:bg-zinc-50/80 transition-colors w-full">
                                 <div
-                                    className={`grid grid-cols-12 gap-2 px-4 py-3.5 items-center w-full ${hasPartials ? "cursor-pointer" : ""}`}
-                                    onClick={() => hasPartials && toggleExpanded(trade.id)}
+                                    className="grid grid-cols-12 gap-2 px-4 py-3.5 items-center w-full cursor-pointer"
+                                    onClick={() => toggleExpanded(pos.key)}
                                 >
-                                    {/* Symbol & Type */}
                                     <div className="col-span-5 md:col-span-3 flex items-center gap-2">
-                                        {hasPartials && (
-                                            <button className="shrink-0 text-zinc-400 hover:text-zinc-600 transition-colors">
-                                                {isExpanded ? (
-                                                    <ChevronDown className="w-4 h-4" />
-                                                ) : (
-                                                    <ChevronRight className="w-4 h-4" />
-                                                )}
-                                            </button>
-                                        )}
-                                        {trade.positionType === "buy" ? (
+                                        <button className="shrink-0 text-zinc-400 hover:text-zinc-600 transition-colors">
+                                            {isExpanded ? (
+                                                <ChevronDown className="w-4 h-4" />
+                                            ) : (
+                                                <ChevronRight className="w-4 h-4" />
+                                            )}
+                                        </button>
+                                        {isBuy ? (
                                             <span className="border border-emerald-300 text-emerald-700 bg-emerald-50 text-[11px] font-mono font-bold w-5 h-5 flex items-center justify-center rounded shrink-0">
                                                 L
                                             </span>
@@ -268,29 +226,27 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
                                                 S
                                             </span>
                                         )}
-                                        <div className="flex flex-col">
-                                            <div className="flex items-center gap-1.5">
+                                        <div className="flex flex-col min-w-0">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
                                                 <span className="font-bold text-sm text-zinc-800 tracking-tight whitespace-nowrap">
-                                                    {trade.symbolName}
+                                                    {pos.symbolName}
                                                 </span>
-                                                {hasPartials && remainingQty !== Number(trade.quantity) && (
-                                                    <span className="border border-amber-300 text-amber-700 bg-amber-50 text-[10px] font-mono px-1.5 py-0.2 rounded font-semibold shrink-0">
-                                                        Partial
+                                                {pos.allEvents.length > 1 && (
+                                                    <span className="border border-zinc-200 text-zinc-600 bg-zinc-100/90 text-[10px] font-mono px-1.5 py-0.5 rounded font-semibold shrink-0" title={`${pos.allEvents.length} activities recorded for this position`}>
+                                                        {pos.allEvents.length} activities
                                                     </span>
                                                 )}
                                             </div>
                                             <span className="text-[11px] text-zinc-400 font-medium md:hidden">
-                                                {new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" }).format(new Date(trade.openDate))}
+                                                {new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" }).format(new Date(pos.openDate))}
                                             </span>
                                         </div>
                                     </div>
 
-                                    {/* Entry Price */}
-                                    <div className="col-span-2 hidden md:block text-center text-sm font-mono tabular-nums text-zinc-700">
-                                        ${formatPrice(trade.entryPrice || "")}
+                                    <div className="col-span-2 hidden md:block text-center text-sm font-mono tabular-nums text-zinc-700 font-semibold">
+                                        ${formatPrice(pos.avgEntryPrice)}
                                     </div>
 
-                                    {/* Mark Price */}
                                     <div className="col-span-2 hidden md:block text-center text-sm font-mono tabular-nums text-zinc-700">
                                         {currentPrice !== null ? (
                                             <span className="inline-flex items-center gap-1">
@@ -302,18 +258,10 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
                                         )}
                                     </div>
 
-                                    {/* Quantity */}
-                                    <div className="col-span-1 hidden md:block text-center text-sm font-mono tabular-nums text-zinc-600">
-                                        {hasPartials ? (
-                                            <span className="text-amber-600 font-medium">
-                                                {formatQty(remainingQty)} / {formatQty(getInitialQty(trade))}
-                                            </span>
-                                        ) : (
-                                            formatQty(trade.quantity || "")
-                                        )}
+                                    <div className="col-span-1 hidden md:block text-center text-sm font-mono tabular-nums text-zinc-700 font-medium">
+                                        {formatQty(pos.totalQuantity)}
                                     </div>
 
-                                    {/* Unrealized P&L & ROI % */}
                                     <div className="col-span-4 md:col-span-2 text-center text-sm font-mono tabular-nums">
                                         {pnl !== null && pnlPercent !== null ? (
                                             <div className="flex flex-col items-center justify-center">
@@ -341,231 +289,280 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
                                         )}
                                     </div>
 
-                                    {/* Actions */}
-                                    <div className="col-span-3 md:col-span-2 flex items-center justify-end gap-1 shrink-0 pl-2" onClick={(e) => e.stopPropagation()}>
-                                        {/* Notes Manager */}
-                                        <HoverCard openDelay={200}>
-                                            <HoverCardTrigger asChild>
-                                                <div>
-                                                    <EditTrade
-                                                        existingTrade={trade}
-                                                        initialTab="notes"
-                                                        trigger={
-                                                            <button
-                                                                className={`p-1.5 rounded transition-colors relative ${
-                                                                    trade.notes && parseTradeNotes(trade.notes, trade.openDate, trade.id).length > 0
-                                                                        ? "text-orange-600 bg-orange-50 hover:bg-orange-100 hover:text-orange-700"
-                                                                        : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100"
-                                                                }`}
-                                                                title="Trade Notes"
-                                                            >
-                                                                <BookOpen className="w-4 h-4" />
-                                                                {trade.notes && parseTradeNotes(trade.notes, trade.openDate, trade.id).length > 0 && (
-                                                                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 border border-white" />
-                                                                )}
-                                                            </button>
-                                                        }
-                                                    />
-                                                </div>
-                                            </HoverCardTrigger>
-                                            {trade.notes && parseTradeNotes(trade.notes, trade.openDate, trade.id).length > 0 && (
-                                                <HoverCardContent className="w-80 p-3" align="end">
-                                                    <div className="space-y-2">
-                                                        <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Trade Note History</h4>
-                                                        <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                                                            {parseTradeNotes(trade.notes, trade.openDate, trade.id).map((note) => (
-                                                                <div key={note.id} className="text-xs border-b border-zinc-100 pb-1.5 last:border-0 last:pb-0">
-                                                                    <div className="flex justify-between items-center mb-0.5">
-                                                                        <span className="font-semibold text-zinc-700 capitalize text-[10px]">
-                                                                            {note.category || 'general'}
-                                                                        </span>
-                                                                        <span className="text-[9px] text-zinc-400">
-                                                                            {dayjs(note.createdAt).format("DD MMM YYYY")}
-                                                                        </span>
-                                                                    </div>
-                                                                    <p className="text-zinc-600 line-clamp-2 leading-normal">{note.text}</p>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                </HoverCardContent>
-                                            )}
-                                        </HoverCard>
-
-                                        {/* Custom Fields */}
-                                        {trade.openOtherDetails && Object.keys(trade.openOtherDetails).length > 0 && (
-                                            <HoverCard>
-                                                <HoverCardTrigger className="p-1.5 rounded hover:bg-zinc-100 transition-colors">
-                                                    <svg className="w-4 h-4 text-zinc-400 hover:text-zinc-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                        <rect x="3" y="3" width="18" height="18" rx="2" />
-                                                        <line x1="9" y1="9" x2="15" y2="9" />
-                                                        <line x1="9" y1="13" x2="15" y2="13" />
-                                                        <line x1="9" y1="17" x2="12" y2="17" />
-                                                    </svg>
-                                                </HoverCardTrigger>
-                                                <HoverCardContent className="w-64">
-                                                    <h4 className="text-xs font-medium text-zinc-500 uppercase mb-2">Custom Details</h4>
-                                                    <div className="space-y-1">
-                                                        {Object.entries(trade.openOtherDetails).map(([key, value]) => (
-                                                            <div key={key} className="flex justify-between text-sm">
-                                                                <span className="text-zinc-500">{key}:</span>
-                                                                <span className="text-zinc-700 font-medium">{value}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </HoverCardContent>
-                                            </HoverCard>
-                                        )}
-
-                                        {/* Delete */}
+                                    <div className="col-span-3 md:col-span-2 flex items-center justify-end gap-1.5 shrink-0 pl-2" onClick={(e) => e.stopPropagation()}>
+                                        {/* Primary Action: + Add */}
                                         <button
+                                            type="button"
                                             onClick={() => {
-                                                setTradeToDelete(trade);
-                                                setDeleteDialogOpen(true);
+                                                if (!primaryTrade) {
+                                                    toast.error("No active primary lot found for this position.");
+                                                    return;
+                                                }
+                                                setAdjustSheetState({ trade: primaryTrade, mode: "add" });
                                             }}
-                                            className="p-1.5 rounded hover:bg-red-50 transition-colors"
-                                            title="Delete Trade"
+                                            className="px-2.5 py-1 text-xs font-semibold rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 flex items-center gap-1 transition-colors shrink-0 shadow-2xs cursor-pointer"
+                                            title="Add to Position (Scale In / 补仓)"
                                         >
-                                            <Trash2 className="w-4 h-4 text-zinc-400 hover:text-red-500" />
+                                            <PlusCircle className="w-3.5 h-3.5" />
+                                            <span>Add</span>
                                         </button>
 
-                                        {/* Divider */}
-                                        <div className="w-px h-4 bg-zinc-200 mx-0.5" />
-
-                                        {/* Adjust Position */}
-                                        <Sheet 
-                                            open={openAdjustSheetTradeId === trade.id} 
-                                            onOpenChange={(open) => setOpenAdjustSheetTradeId(open ? trade.id : null)}
-                                        >
-                                            <SheetTrigger asChild>
+                                        {/* Secondary Actions: Manage ▾ Dropdown Menu */}
+                                        <Popover open={openManageMenuKey === pos.key} onOpenChange={(open) => setOpenManageMenuKey(open ? pos.key : null)}>
+                                            <PopoverTrigger asChild>
                                                 <button
-                                                    className="p-1.5 rounded hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-colors shrink-0"
-                                                    title="Adjust Position"
+                                                    type="button"
+                                                    className="px-2 py-1 text-xs font-medium rounded-md bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-200 flex items-center gap-1 transition-colors shrink-0 shadow-2xs cursor-pointer"
+                                                    title="Manage Position"
                                                 >
-                                                    <RefreshCw className="w-4 h-4" />
+                                                    <span>Manage</span>
+                                                    <ChevronDown className="w-3 h-3 text-zinc-500" />
                                                 </button>
-                                            </SheetTrigger>
-                                            <SheetContent>
-                                                <TradeDialog
-                                                    editMode={true}
-                                                    existingTrade={trade}
-                                                    initialTab="adjust-position"
-                                                    onRequestClose={() => setOpenAdjustSheetTradeId(null)}
-                                                />
-                                            </SheetContent>
-                                        </Sheet>
+                                            </PopoverTrigger>
+                                            <PopoverContent align="end" className="w-48 p-1.5 shadow-xl border border-zinc-200 rounded-lg bg-white">
+                                                <div className="flex flex-col gap-0.5 text-xs">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setOpenManageMenuKey(null);
+                                                            if (primaryTrade) {
+                                                                setAdjustSheetState({ trade: primaryTrade, mode: "reduce" });
+                                                            }
+                                                        }}
+                                                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-zinc-700 hover:bg-amber-50 hover:text-amber-800 transition-colors text-left cursor-pointer"
+                                                    >
+                                                        <MinusCircle className="w-3.5 h-3.5 text-amber-600" />
+                                                        <span>Reduce Position</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setOpenManageMenuKey(null);
+                                                            if (primaryTrade) {
+                                                                setAdjustSheetState({ trade: primaryTrade, mode: "close" });
+                                                            }
+                                                        }}
+                                                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-zinc-700 hover:bg-rose-50 hover:text-rose-800 transition-colors text-left cursor-pointer"
+                                                    >
+                                                        <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                                                        <span>Close Position</span>
+                                                    </button>
 
-                                        {/* Close Position */}
-                                        <Sheet 
-                                            open={openSheetTradeId === trade.id} 
-                                            onOpenChange={(open) => setOpenSheetTradeId(open ? trade.id : null)}
-                                        >
-                                            <SheetTrigger asChild>
-                                                <button
-                                                    className="p-1.5 rounded hover:bg-rose-50 text-rose-500 hover:text-rose-600 transition-colors shrink-0"
-                                                    title="Close Position"
-                                                >
-                                                    <XCircle className="w-4 h-4" />
-                                                </button>
-                                            </SheetTrigger>
-                                            <SheetContent>
-                                                <TradeDialog
-                                                    editMode={true}
-                                                    existingTrade={trade}
-                                                    initialTab="close-details"
-                                                    onRequestClose={() => setOpenSheetTradeId(null)}
-                                                />
-                                            </SheetContent>
-                                        </Sheet>
+                                                    <div className="my-1 border-t border-zinc-100" />
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setOpenManageMenuKey(null);
+                                                            if (primaryTrade) {
+                                                                setEditInitialTrade(primaryTrade);
+                                                            }
+                                                        }}
+                                                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-zinc-700 hover:bg-zinc-100 transition-colors text-left cursor-pointer"
+                                                        title="Correct raw opening baseline"
+                                                    >
+                                                        <Pencil className="w-3.5 h-3.5 text-zinc-500" />
+                                                        <span>Edit initial entry</span>
+                                                    </button>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setOpenManageMenuKey(null);
+                                                            if (primaryTrade) {
+                                                                setTradeNotesTrade(primaryTrade);
+                                                            }
+                                                        }}
+                                                        className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-zinc-700 hover:bg-zinc-100 transition-colors text-left cursor-pointer"
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <BookOpen className="w-3.5 h-3.5 text-zinc-500" />
+                                                            <span>Trade Notes</span>
+                                                        </div>
+                                                        {primaryTrade?.notes && parseTradeNotes(primaryTrade.notes, primaryTrade.openDate, primaryTrade.id).length > 0 && (
+                                                            <span className="text-[10px] font-semibold bg-orange-100 text-orange-700 px-1.5 py-0.2 rounded-full">
+                                                                {parseTradeNotes(primaryTrade.notes, primaryTrade.openDate, primaryTrade.id).length}
+                                                            </span>
+                                                        )}
+                                                    </button>
+
+                                                    <div className="my-1 border-t border-zinc-100" />
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setOpenManageMenuKey(null);
+                                                            if (primaryTrade) {
+                                                                setTradeToDelete(primaryTrade);
+                                                                setDeleteDialogOpen(true);
+                                                            }
+                                                        }}
+                                                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-rose-600 hover:bg-rose-50 transition-colors text-left cursor-pointer"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                                                        <span>Delete Trade</span>
+                                                    </button>
+                                                </div>
+                                            </PopoverContent>
+                                        </Popover>
                                     </div>
                                 </div>
 
-                                {/* Expanded Position History Section */}
-                                {hasPartials && isExpanded && (
-                                    <div className="bg-zinc-50/90 border-t border-zinc-100 px-4 py-3">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                                                Position History ({closeEvents.length} {closeEvents.length === 1 ? 'event' : 'events'})
-                                            </h4>
-                                            <span className={`text-xs font-bold font-mono tabular-nums ${partialTotal >= 0 ? 'text-buy' : 'text-sell'}`}>
-                                                Net Realized P/L: {partialTotal >= 0 ? '+' : ''}${formatCurrency(partialTotal)}
-                                            </span>
+                                {isExpanded && (
+                                    <div className="bg-zinc-50/90 border-t border-zinc-100 px-4 py-3.5 space-y-4">
+                                        {/* Position Actions Toolbar */}
+                                        <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-white border border-zinc-200/80 rounded-lg shadow-2xs">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-semibold text-zinc-700">Quick Actions:</span>
+                                                {pos.isMultiple ? (
+                                                    <span className="text-[11px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 font-medium">
+                                                        {pos.constituentTrades.length} lots consolidated • Scale operations apply to Primary Lot #{primaryTrade.id.slice(0, 8)}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-[11px] text-zinc-500 font-mono">
+                                                        Lot #{primaryTrade.id.slice(0, 8)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setAdjustSheetState({ trade: primaryTrade, mode: "add" })}
+                                                    className="px-2.5 py-1 text-xs font-semibold rounded-md bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
+                                                >
+                                                    <PlusCircle className="w-3.5 h-3.5" />
+                                                    <span>Add to Position</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setAdjustSheetState({ trade: primaryTrade, mode: "reduce" })}
+                                                    className="px-2.5 py-1 text-xs font-semibold rounded-md bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
+                                                >
+                                                    <MinusCircle className="w-3.5 h-3.5" />
+                                                    <span>Reduce Position</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setAdjustSheetState({ trade: primaryTrade, mode: "close" })}
+                                                    className="px-2.5 py-1 text-xs font-semibold rounded-md bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
+                                                >
+                                                    <XCircle className="w-3.5 h-3.5" />
+                                                    <span>Close Position</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setEditInitialTrade(primaryTrade)}
+                                                    className="px-2 py-1 text-xs font-medium rounded-md bg-zinc-100 hover:bg-zinc-200 text-zinc-700 flex items-center gap-1 transition-colors border border-zinc-200 cursor-pointer"
+                                                    title="Edit initial open record baseline"
+                                                >
+                                                    <Pencil className="w-3 h-3" />
+                                                    <span>Edit initial entry</span>
+                                                </button>
+                                            </div>
                                         </div>
+
+                                        {pos.isMultiple && (
+                                            <div className="space-y-1.5">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Layers className="w-3.5 h-3.5 text-blue-600" />
+                                                    <h4 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">
+                                                        Consolidated Lots ({pos.constituentTrades.length} records)
+                                                    </h4>
+                                                </div>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                                                    {pos.constituentTrades.map((trade, idx) => (
+                                                        <div key={trade.id} className="p-2.5 bg-white border border-blue-100 rounded-lg text-xs font-mono space-y-1 shadow-2xs">
+                                                            <div className="flex items-center justify-between text-zinc-500 text-[11px]">
+                                                                <span>Lot #{idx + 1} ({dayjs(trade.openDate).format("DD MMM YYYY")})</span>
+                                                                <span className="text-[10px] text-zinc-400">{trade.openTime || "00:00"}</span>
+                                                            </div>
+                                                            <div className="flex items-baseline justify-between">
+                                                                <span className="font-bold text-zinc-800">{formatQty(trade.quantity || 0)} units</span>
+                                                                <span className="text-zinc-600">@ ${formatPrice(trade.entryPrice || 0)}</span>
+                                                            </div>
+                                                            <div className="text-[10px] text-zinc-400 text-right">
+                                                                Cost: ${formatCurrency((Number(trade.quantity) || 0) * (Number(trade.entryPrice) || 0))}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
                                         <div className="space-y-1.5">
-                                            {(() => {
-                                                const initialQty = Number(trade.openOtherDetails?.initialQty) || Number(trade.quantity) || 0;
-                                                const initialPrice = Number(trade.openOtherDetails?.initialEntryPrice) || Number(trade.entryPrice) || 0;
-                                                let runningQty = initialQty;
-                                                let runningPrice = initialPrice;
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Calendar className="w-3.5 h-3.5 text-zinc-500" />
+                                                    <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                                                        Position Timeline ({pos.allEvents.length} {pos.allEvents.length === 1 ? 'event' : 'events'})
+                                                    </h4>
+                                                </div>
+                                                <span className="text-xs font-medium text-zinc-500 font-mono">
+                                                    Net Holding: {formatQty(pos.totalQuantity)} units @ VWAP ${formatPrice(pos.avgEntryPrice)}
+                                                </span>
+                                            </div>
 
-                                                return closeEvents.map((event: CloseEvent, index: number) => {
-                                                    const qChange = event.quantityChange !== undefined ? event.quantityChange : (event.quantitySold !== undefined ? -event.quantitySold : 0);
-                                                    const eventPrice = event.price !== undefined ? event.price : (event.sellPrice !== undefined ? event.sellPrice : 0);
-                                                    const isScaleIn = qChange > 0;
-
-                                                    if (isScaleIn) {
-                                                        const newQty = runningQty + qChange;
-                                                        runningPrice = newQty > 0 ? (runningPrice * runningQty + eventPrice * qChange) / newQty : runningPrice;
-                                                        runningQty = newQty;
-                                                    } else {
-                                                        runningQty = runningQty + qChange;
-                                                    }
+                                            <div className="space-y-1.5">
+                                                {pos.allEvents.map((event, index) => {
+                                                    const isScaleIn = event.eventType === "add" || event.isInitialOpen;
+                                                    const isFullClose = event.eventType === "close";
 
                                                     return (
                                                         <div 
                                                             key={event.id || index}
                                                             className="grid grid-cols-12 gap-2 py-2 text-xs font-mono tabular-nums bg-white rounded-lg px-3 border border-zinc-200/70 items-center"
                                                         >
-                                                            {/* Date & Time */}
                                                             <div className="col-span-3 text-zinc-600 font-sans">
                                                                 {new Intl.DateTimeFormat("en-GB", {
                                                                     day: "2-digit",
                                                                     month: "short",
+                                                                    year: "numeric",
                                                                 }).format(new Date(event.date))}
                                                                 <span className="ml-1 text-[11px] text-zinc-400 font-mono">{event.time}</span>
                                                             </div>
 
-                                                            {/* Price */}
                                                             <div className="col-span-3 text-zinc-700">
                                                                 <span className="text-zinc-400">@ </span>
-                                                                ${formatPrice(eventPrice)}
+                                                                ${formatPrice(event.price)}
                                                             </div>
 
-                                                            {/* Qty Change */}
                                                             <div className="col-span-3">
-                                                                {isScaleIn ? (
+                                                                {event.isInitialOpen ? (
+                                                                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200/50">
+                                                                        {formatQty(event.quantity)} (Open)
+                                                                    </span>
+                                                                ) : isScaleIn ? (
                                                                     <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200/50">
-                                                                        +{formatQty(qChange)} (Add)
+                                                                        +{formatQty(event.quantity)} (Add)
+                                                                    </span>
+                                                                ) : isFullClose ? (
+                                                                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200/50">
+                                                                        -{formatQty(event.quantity)} (Close)
                                                                     </span>
                                                                 ) : (
                                                                     <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200/50">
-                                                                        {formatQty(qChange)} (Reduce)
+                                                                        -{formatQty(event.quantity)} (Reduce)
                                                                     </span>
                                                                 )}
                                                             </div>
 
-                                                            {/* Result or Avg Price + Delete */}
                                                             <div className="col-span-3 flex items-center gap-1.5 justify-end font-semibold">
-                                                                {isScaleIn ? (
-                                                                    <span className="text-xs text-zinc-500 font-medium">
-                                                                        Avg: ${formatPrice(runningPrice)}
-                                                                    </span>
-                                                                ) : event.result !== undefined && event.result !== 0 ? (
+                                                                {event.result !== undefined && event.result !== 0 ? (
                                                                     <>
                                                                         {event.result >= 0 ? (
-                                                                            <FaArrowTrendUp className="text-buy text-xs" />
+                                                                            <FaArrowTrendUp className="text-emerald-600 text-xs" />
                                                                         ) : (
-                                                                            <FaArrowTrendDown className="text-sell text-xs" />
+                                                                            <FaArrowTrendDown className="text-rose-600 text-xs" />
                                                                         )}
-                                                                        <span className={event.result >= 0 ? "text-buy" : "text-sell"}>
+                                                                        <span className={event.result >= 0 ? "text-emerald-600" : "text-rose-600"}>
                                                                             {event.result >= 0 ? "+" : ""}
                                                                             ${formatCurrency(event.result)}
                                                                         </span>
                                                                     </>
                                                                 ) : (
-                                                                    <span className="text-zinc-300">—</span>
+                                                                    <span className="text-zinc-300 font-normal">—</span>
                                                                 )}
-                                                                {event.id && (
+                                                                {!event.isInitialOpen && event.id && (
                                                                     <button
                                                                         type="button"
                                                                         disabled={deletingEventId === event.id}
@@ -574,20 +571,20 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
                                                                             if (!event.id) return;
                                                                             setDeletingEventId(event.id);
                                                                             try {
-                                                                                const res = await deletePositionEvent(trade.id, event.id);
+                                                                                const res = await deletePositionEvent(event.tradeId, event.id);
                                                                                 if (res?.updatedTrade) {
                                                                                     dispatch(updateTradeInList(res.updatedTrade));
                                                                                     dispatch(updateTradeInFilteredList(res.updatedTrade));
-                                                                                    toast.success("Position event deleted successfully!");
+                                                                                    toast.success("Adjustment event deleted!");
                                                                                 }
                                                                             } catch {
-                                                                                toast.error("Failed to delete position event.");
+                                                                                toast.error("Failed to delete adjustment event.");
                                                                             } finally {
                                                                                 setDeletingEventId(null);
                                                                             }
                                                                         }}
-                                                                        className="p-1 rounded text-zinc-300 hover:text-rose-600 hover:bg-rose-50 transition-colors shrink-0"
-                                                                        title="Delete this position event"
+                                                                        className="p-1 rounded hover:bg-red-50 text-zinc-300 hover:text-red-500 transition-colors ml-1"
+                                                                        title="Delete this event"
                                                                     >
                                                                         <Trash2 className="w-3.5 h-3.5" />
                                                                     </button>
@@ -595,8 +592,8 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
                                                             </div>
                                                         </div>
                                                     );
-                                                });
-                                            })()}
+                                                })}
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -607,18 +604,76 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
             </div>
 
             {/* Delete Trade Confirmation Dialog */}
-            <DeleteTradeDialog
-                isOpen={deleteDialogOpen}
-                onOpenChange={setDeleteDialogOpen}
-                symbolName={tradeToDelete?.symbolName}
-                message={`Are you sure you want to delete open position for "${tradeToDelete?.symbolName || ""}"?`}
-                onConfirm={async () => {
-                    if (!tradeToDelete) return;
-                    await handleDeleteOpenTrade(tradeToDelete.id);
-                    setDeleteDialogOpen(false);
-                    setTradeToDelete(null);
-                }}
-            />
+            {tradeToDelete && (
+                <DeleteTradeDialog
+                    isOpen={deleteDialogOpen}
+                    onOpenChange={setDeleteDialogOpen}
+                    symbolName={tradeToDelete.symbolName}
+                    onConfirm={() => {
+                        handleDeleteOpenTrade(tradeToDelete.id);
+                        setDeleteDialogOpen(false);
+                        setTradeToDelete(null);
+                    }}
+                />
+            )}
+
+            {/* Adjust Position Sheet (Add / Reduce / Close) */}
+            {adjustSheetState && (
+                <Sheet 
+                    open={!!adjustSheetState} 
+                    onOpenChange={(open) => {
+                        if (!open) setAdjustSheetState(null);
+                    }}
+                >
+                    <SheetContent>
+                        <TradeDialog
+                            editMode={true}
+                            existingTrade={adjustSheetState.trade}
+                            initialTab="adjust-position"
+                            initialAdjustMode={adjustSheetState.mode}
+                            onRequestClose={() => setAdjustSheetState(null)}
+                        />
+                    </SheetContent>
+                </Sheet>
+            )}
+
+            {/* Edit Initial Trade Record Sheet (Baseline) */}
+            {editInitialTrade && (
+                <Sheet 
+                    open={!!editInitialTrade} 
+                    onOpenChange={(open) => {
+                        if (!open) setEditInitialTrade(null);
+                    }}
+                >
+                    <SheetContent>
+                        <TradeDialog
+                            editMode={true}
+                            existingTrade={editInitialTrade}
+                            initialTab="open-details"
+                            onRequestClose={() => setEditInitialTrade(null)}
+                        />
+                    </SheetContent>
+                </Sheet>
+            )}
+
+            {/* Trade Notes Sheet */}
+            {tradeNotesTrade && (
+                <Sheet 
+                    open={!!tradeNotesTrade} 
+                    onOpenChange={(open) => {
+                        if (!open) setTradeNotesTrade(null);
+                    }}
+                >
+                    <SheetContent>
+                        <TradeDialog
+                            editMode={true}
+                            existingTrade={tradeNotesTrade}
+                            initialTab="notes"
+                            onRequestClose={() => setTradeNotesTrade(null)}
+                        />
+                    </SheetContent>
+                </Sheet>
+            )}
         </div>
     );
 };

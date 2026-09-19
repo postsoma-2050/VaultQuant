@@ -8,11 +8,6 @@ import { useMemo } from "react";
 import { OpenTradesTable } from "@/components/history/OpenTradesTable";
 import { CloseTradesTable } from "@/components/history/CloseTradesTable";
 
-// Helper to calculate total P/L from closeEvents
-const getPartialClosesTotal = (trade: Trades): number => {
-    const closeEvents = trade.closeEvents || [];
-    return closeEvents.reduce((sum, event) => sum + (event.result || 0), 0);
-};
 
 export default function Page() {
     const trades = useAppSelector((state) => state.tradeRecords.listOfTrades);

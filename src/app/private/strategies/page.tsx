@@ -12,7 +12,6 @@ import {
     GetStrategiesResult,
     GetStrategiesSuccess,
 } from "@/types/strategies.types";
-import Image from "next/image";
 import Link from "next/link";
 import { Shield } from "lucide-react";
 import React, { useState, useEffect } from "react";

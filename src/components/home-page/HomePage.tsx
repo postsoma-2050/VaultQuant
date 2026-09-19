@@ -15,7 +15,6 @@ import HomePageFooter from "./HomePageFooter";
 import { fakeDataChartTwo, otherData, tradingData } from "@/data/data";
 import Link from "next/link";
 import HomePageAi from "./HomePageAI";
-import { SiClaude } from "react-icons/si";
 import HomePageMobileAiPage from "./HomePageMobileAI";
 import HomePageJournal from "./HomePageJournal";
 

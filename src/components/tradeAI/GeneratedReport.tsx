@@ -6,7 +6,6 @@ import { ArrowUp, Loader2 } from "lucide-react";
 
 import { Category, ReportType, OpenPositionPayload, PortfolioRiskSummary } from "@/types/tradeAI.types";
 import { toast } from "sonner";
-import CustomLoading from "../CustomLoading";
 import AutoResizeTextarea from "@/features/archive/AutoResizeTextarea";
 import { useAppSelector } from "@/redux/store";
 
@@ -28,7 +27,6 @@ export default function GeneratedReport({
     report,
     selectCategory,
     setReport,
-    setTokens,
     enrichedTrades,
     openPositions,
     portfolioSummary,

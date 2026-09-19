@@ -1,6 +1,7 @@
 import { Rule, CloseEvent } from "./dbSchema.types";
 
 export type Trades = {
+    userId?: string;
     notes: string | undefined;
     id: string;
     result?: string;

@@ -248,11 +248,13 @@ export function exportTradesToCSV(trades: Trades[]): string {
         "result",
         "isActiveTrade",
         "notes",
+        "closeEvents",
+        "openOtherDetails",
     ];
 
     function escapeCSVField(val: unknown): string {
         if (val === undefined || val === null) return "";
-        const str = String(val);
+        const str = typeof val === "object" ? JSON.stringify(val) : String(val);
         if (str.includes(",") || str.includes('"') || str.includes("\n") || str.includes("\r")) {
             return `"${str.replace(/"/g, '""')}"`;
         }
@@ -276,6 +278,8 @@ export function exportTradesToCSV(trades: Trades[]): string {
             escapeCSVField(trade.result),
             escapeCSVField(trade.isActiveTrade),
             escapeCSVField(trade.notes),
+            escapeCSVField(trade.closeEvents),
+            escapeCSVField(trade.openOtherDetails),
         ];
         rows.push(row.join(","));
     }

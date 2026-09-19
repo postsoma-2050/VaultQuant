@@ -7,12 +7,18 @@ import { newTradeFormSchema } from "@/zodSchema/schema";
 
 type FormType = z.infer<typeof newTradeFormSchema>;
 
-function toNum(value?: string): number | undefined {
+export function toNum(value?: unknown): number | undefined {
     if (value == null) return undefined;
-    const trimmed = value.trim();
-    if (trimmed === "") return undefined;
-    const n = Number(trimmed);
-    return Number.isFinite(n) ? n : undefined;
+    if (typeof value === "number") {
+        return Number.isFinite(value) ? value : undefined;
+    }
+    if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (trimmed === "") return undefined;
+        const n = Number(trimmed);
+        return Number.isFinite(n) ? n : undefined;
+    }
+    return undefined;
 }
 
 export function useAutoCalcResult(form: UseFormReturn<FormType>) {

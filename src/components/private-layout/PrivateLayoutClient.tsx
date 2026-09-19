@@ -80,7 +80,7 @@ export default function PrivateLayoutClient({
             }
         }
 
-        if (currentStrategiesInStore === null) {
+        if (currentStrategiesInStore === null || currentStrategiesInStore.length === 0 || (initialStrategies && initialStrategies.length > currentStrategiesInStore.length)) {
             dispatch(setStrategyState(initialStrategies));
         }
     }, [

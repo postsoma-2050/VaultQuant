@@ -32,7 +32,7 @@ export default function Page() {
             }
         }
         fetchData();
-    }, []);
+    }, [reportId]);
     return (
         <ReportPage
             tokens={tokens}

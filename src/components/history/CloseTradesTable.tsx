@@ -83,7 +83,6 @@ type CloseTradesTableProps = {
 
 export const CloseTradesTable = ({
     trades,
-    total,
 }: CloseTradesTableProps) => {
     const [strategyDialogOpen, setStrategyDialogOpen] = useState(false);
     const [selectedTrade, setSelectedTrade] = useState<ClosedTrade | null>(null);
@@ -178,6 +177,9 @@ export const CloseTradesTable = ({
                 <div className="border border-zinc-200/80 rounded-xl p-4 bg-white shadow-xs hover:border-zinc-300 transition-colors">
                     <div className="flex items-center justify-between">
                         <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Net Realized P/L</p>
+                        <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border font-mono tabular-nums ${totalROIPercent >= 0 ? "bg-emerald-50 text-emerald-700 border-emerald-200/60" : "bg-rose-50 text-rose-700 border-rose-200/60"}`}>
+                            ROI {totalROIPercent >= 0 ? "+" : ""}{totalROIPercent.toFixed(1)}%
+                        </span>
                     </div>
                     <p className={`text-2xl font-bold font-mono tabular-nums mt-2 ${netPnL >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
                         {netPnL >= 0 ? "+$" : "-$"}{Math.abs(netPnL).toLocaleString("en-US", { minimumFractionDigits: 2 })}
@@ -231,7 +233,7 @@ export const CloseTradesTable = ({
                             totalQty = Number(trade.quantitySold) || Number(trade.quantity) || 0;
                             totalResult = Number(trade.result) || 0;
                             avgSellPrice = Number(trade.sellPrice) || 0;
-                            const finalResult = (trade as any).result !== undefined ? (trade as any).result : 0;
+                            const finalResult = trade.result !== undefined ? Number(trade.result) : 0;
                             allCloseEvents = closeEvents.length > 0 ? [
                                 ...closeEvents,
                                 {

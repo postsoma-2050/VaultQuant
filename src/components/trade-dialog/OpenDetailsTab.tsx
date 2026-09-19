@@ -17,6 +17,8 @@ import { Input } from "../ui/input";
 import { useAppSelector } from "@/redux/store";
 import { useMarketPrices } from "@/hooks/useMarketPrices";
 import { CustomFieldsSection } from "./CustomFieldsSection";
+import { Trades } from "@/types";
+import { PlusCircle, MinusCircle, XCircle, AlertCircle } from "lucide-react";
 
 interface OpenDetailsTabProps {
     form: UseFormReturn<z.infer<typeof newTradeFormSchema>>;
@@ -27,6 +29,7 @@ interface OpenDetailsTabProps {
     userFieldNames: string[];
     onFieldNamesChange?: () => void;
     editMode?: boolean;
+    existingTrade?: Trades;
 
     validationState: "idle" | "validating" | "valid" | "invalid";
     validationPrice?: number;
@@ -34,23 +37,25 @@ interface OpenDetailsTabProps {
     setValidationPrice: React.Dispatch<React.SetStateAction<number | undefined>>;
     bypassValidation: boolean;
     setBypassValidation: React.Dispatch<React.SetStateAction<boolean>>;
+    onSelectExistingPosition?: (trade: Trades, mode: "add" | "reduce" | "close") => void;
 }
 
 export const OpenDetailsTab = ({
     form,
     openDate,
     setOpenDate,
-    symbolLabels,
     day,
     userFieldNames,
     onFieldNamesChange,
     editMode = false,
+    existingTrade,
     validationState,
     validationPrice,
     setValidationState,
     setValidationPrice,
     bypassValidation,
     setBypassValidation,
+    onSelectExistingPosition,
 }: OpenDetailsTabProps) => {
     const { register, control, setValue, formState: { errors } } = form;
 
@@ -100,8 +105,72 @@ export const OpenDetailsTab = ({
 
     const { prices } = useMarketPrices(allSymbolsToFetch);
 
+    const formSymbol = form.watch("symbolName");
+    const formPositionType = form.watch("positionType");
+
+    const cleanSymbol = React.useMemo(() => {
+        return (formSymbol || "").trim().toUpperCase();
+    }, [formSymbol]);
+
+    const matchingActiveTrades = React.useMemo(() => {
+        if (editMode || !cleanSymbol || !formPositionType || !trades) return [];
+        return trades.filter((t) => {
+            const isActive = t.isActiveTrade !== false && (!t.closeDate || t.closeDate === "");
+            const symbolMatches = (t.symbolName || "").trim().toUpperCase() === cleanSymbol;
+            const typeMatches = (t.positionType || "").toLowerCase() === formPositionType.toLowerCase();
+            return isActive && symbolMatches && typeMatches;
+        });
+    }, [editMode, cleanSymbol, formPositionType, trades]);
+
+    const matchingActiveTrade = matchingActiveTrades.length === 1 ? matchingActiveTrades[0] : null;
+    const isMultipleMatching = matchingActiveTrades.length > 1;
+
+    const oppositeActiveTrade = React.useMemo(() => {
+        if (editMode || !cleanSymbol || !formPositionType || !trades) return null;
+        const oppositeType = formPositionType.toLowerCase() === "buy" ? "sell" : "buy";
+        return trades.find((t) => {
+            const isActive = t.isActiveTrade !== false && (!t.closeDate || t.closeDate === "");
+            const symbolMatches = (t.symbolName || "").trim().toUpperCase() === cleanSymbol;
+            const typeMatches = (t.positionType || "").toLowerCase() === oppositeType;
+            return isActive && symbolMatches && typeMatches;
+        }) || null;
+    }, [editMode, cleanSymbol, formPositionType, trades]);
+
     return (
         <div className="flex flex-col gap-4">
+            {/* Edit Mode Notice: Clarify that this tab is for initial open baseline only */}
+            {editMode && existingTrade && existingTrade.isActiveTrade !== false && (!existingTrade.closeDate || existingTrade.closeDate === "") && (
+                <div className="bg-amber-50/80 border border-amber-200/80 rounded-lg p-3 text-xs text-amber-900 flex flex-col gap-2">
+                    <div className="flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                            <span className="font-semibold text-amber-950">Editing Initial Open Record.</span>{" "}
+                            <span className="text-amber-800">Changes here update the initial baseline. To add or reduce size with a timestamped timeline event, use <strong>Adjust Position</strong>.</span>
+                        </div>
+                    </div>
+                    {onSelectExistingPosition && (
+                        <div className="flex gap-2 ml-6">
+                            <button
+                                type="button"
+                                onClick={() => onSelectExistingPosition(existingTrade, "add")}
+                                className="px-2.5 py-1 text-xs font-semibold rounded bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                                <PlusCircle className="w-3.5 h-3.5" />
+                                <span>+ Add to Position</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => onSelectExistingPosition(existingTrade, "reduce")}
+                                className="px-2.5 py-1 text-xs font-semibold rounded bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                                <MinusCircle className="w-3.5 h-3.5" />
+                                <span>- Reduce Position</span>
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* Date and Time Section */}
             <div className="border border-zinc-200 rounded-lg p-4">
                 <h3 className="text-sm font-medium text-zinc-700 mb-3">When did you open?</h3>
@@ -382,6 +451,97 @@ export const OpenDetailsTab = ({
                         )}
                     />
                 </div>
+
+                {/* Single Active Position Detected Card */}
+                {matchingActiveTrade && (
+                    <div className="mb-4 border border-blue-200/90 bg-blue-50/80 rounded-xl p-3.5 space-y-2.5 shadow-xs">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                                <span className="text-xs font-bold text-blue-950 uppercase tracking-wide">
+                                    Active Position Detected
+                                </span>
+                            </div>
+                            <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-blue-100/90 text-blue-800 border border-blue-200">
+                                {matchingActiveTrade.symbolName} • {matchingActiveTrade.positionType === "buy" ? "Long" : "Short"}
+                            </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-xs bg-white/90 border border-blue-100 rounded-lg p-2.5">
+                            <div>
+                                <span className="text-zinc-500 block text-[11px]">Current Holding:</span>
+                                <span className="font-mono font-bold text-zinc-800 text-sm">
+                                    {Number(matchingActiveTrade.quantity || 0).toLocaleString()} units
+                                </span>
+                            </div>
+                            <div>
+                                <span className="text-zinc-500 block text-[11px]">Avg Entry (VWAP):</span>
+                                <span className="font-mono font-bold text-zinc-800 text-sm">
+                                    ${Number(matchingActiveTrade.entryPrice || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                                </span>
+                            </div>
+                        </div>
+
+                        <p className="text-[11px] text-blue-900 leading-snug">
+                            An active position already exists. Select an action below to scale in, scale out, or close this position:
+                        </p>
+
+                        <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+                            <button
+                                type="button"
+                                onClick={() => onSelectExistingPosition?.(matchingActiveTrade, "add")}
+                                className="py-2 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-semibold flex items-center justify-center gap-1 shadow-xs transition-colors cursor-pointer"
+                            >
+                                <PlusCircle className="w-3.5 h-3.5" />
+                                Add to Pos
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => onSelectExistingPosition?.(matchingActiveTrade, "reduce")}
+                                className="py-2 px-2 bg-amber-600 hover:bg-amber-700 text-white rounded-md text-xs font-semibold flex items-center justify-center gap-1 shadow-xs transition-colors cursor-pointer"
+                            >
+                                <MinusCircle className="w-3.5 h-3.5" />
+                                Reduce Pos
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => onSelectExistingPosition?.(matchingActiveTrade, "close")}
+                                className="py-2 px-2 bg-rose-600 hover:bg-rose-700 text-white rounded-md text-xs font-semibold flex items-center justify-center gap-1 shadow-xs transition-colors cursor-pointer"
+                            >
+                                <XCircle className="w-3.5 h-3.5" />
+                                Close Pos
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Multiple Active Positions (Legacy Duplicates) Warning Card */}
+                {isMultipleMatching && (
+                    <div className="mb-4 border border-amber-300 bg-amber-50 rounded-xl p-3.5 space-y-2 shadow-xs text-amber-950">
+                        <div className="flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                            <span className="text-xs font-bold uppercase tracking-wide">
+                                Multiple Open Positions Detected ({matchingActiveTrades.length} records)
+                            </span>
+                        </div>
+                        <p className="text-xs text-amber-800 leading-snug">
+                            You currently have <strong className="font-mono">{matchingActiveTrades.length} separate open records</strong> for <strong className="font-mono">{cleanSymbol} {formPositionType === "buy" ? "Long" : "Short"}</strong>. Creating another duplicate trade is disabled. Please view and manage your positions from the consolidated Open Positions table.
+                        </p>
+                    </div>
+                )}
+
+                {/* Opposite Direction (Hedge) Position Notice */}
+                {oppositeActiveTrade && matchingActiveTrades.length === 0 && (
+                    <div className="mb-4 flex items-start gap-2 p-2.5 rounded-lg border border-purple-200 bg-purple-50/70 text-purple-900 text-xs">
+                        <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-purple-600" />
+                        <div>
+                            <p className="font-semibold">Hedge Position Notice</p>
+                            <p className="mt-0.5 text-purple-800 leading-snug">
+                                You currently hold an active <strong className="font-mono">{oppositeActiveTrade.symbolName} {oppositeActiveTrade.positionType === "buy" ? "Long" : "Short"}</strong> position ({Number(oppositeActiveTrade.quantity || 0).toLocaleString()} units). Submitting this will establish an independent <strong className="font-mono">{formPositionType === "buy" ? "Long" : "Short"}</strong> hedge position.
+                            </p>
+                        </div>
+                    </div>
+                )}
 
                 {/* Entry Price and Quantity */}
                 <div className="flex gap-4">

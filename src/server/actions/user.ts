@@ -100,7 +100,7 @@ export async function ensureLocalUser() {
                 createdAt: new Date().toISOString(),
             }).onConflictDoNothing();
         }
-    } catch (err: any) {
+    } catch (err: unknown) {
         console.error("Error ensuring local user:", err);
     }
 }

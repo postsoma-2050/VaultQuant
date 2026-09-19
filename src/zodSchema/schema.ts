@@ -11,9 +11,13 @@ const closeEventSchema = z.object({
     id: z.string(),
     date: z.string(),
     time: z.string(),
-    quantitySold: z.number(),
-    sellPrice: z.number(),
-    result: z.number(),
+    quantitySold: z.number().optional().default(0),
+    sellPrice: z.number().optional().default(0),
+    result: z.number().optional().default(0),
+    quantityChange: z.number().optional(),
+    price: z.number().optional(),
+    eventType: z.enum(["add", "reduce", "close"]).optional(),
+    notes: z.string().optional(),
 });
 
 export const newTradeFormSchema = z.object({
@@ -133,4 +137,5 @@ export const adjustPositionSchema = z.object({
         }),
     adjustDate: z.string().min(1, { message: "Adjustment date is required." }),
     adjustTime: z.string().min(1, { message: "Adjustment time is required." }),
+    eventType: z.enum(["add", "reduce", "close"]).optional(),
 });

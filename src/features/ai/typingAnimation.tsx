@@ -38,7 +38,7 @@ const TypingTextAnimation = ({
                 return () => clearTimeout(displayTimeout);
             }
         }
-    }, [charIndex, currentIndex, items]);
+    }, [charIndex, currentIndex, items, delay, typingSpeed]);
 
     return (
         <div className="flex flex-col gap-2">

@@ -11,7 +11,7 @@ import {
     Tooltip,
     ResponsiveContainer,
 } from "recharts";
-import { TrendingUp, TrendingDown, Clock, Zap, Target } from "lucide-react";
+import { Clock, Zap, Target } from "lucide-react";
 
 interface GetOtherDataForGridPageOneResult {
     chartOne: {
@@ -135,8 +135,28 @@ export function StatsGridPageOne({
         );
     };
 
+    interface TooltipPayloadData {
+        formattedDate: string;
+        capital: number;
+        pnl: number;
+        pnlPercent?: number;
+        sp500?: number;
+        sp500Capital?: number;
+        symbolName?: string;
+        drawdown: number;
+        drawdownPct: string;
+    }
+
     // Custom recharts tooltip
-    const CustomTooltip = ({ active, payload }: any) => {
+    const CustomTooltip = ({
+        active,
+        payload,
+    }: {
+        active?: boolean;
+        payload?: Array<{
+            payload: TooltipPayloadData;
+        }>;
+    }) => {
         if (active && payload && payload.length) {
             const data = payload[0].payload;
             const isPnlPositive = data.pnl >= 0;

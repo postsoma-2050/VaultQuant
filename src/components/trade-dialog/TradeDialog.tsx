@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import dayjs from "dayjs";
 
 import { Trades } from "@/types";
@@ -15,6 +15,7 @@ import { StrategyTab } from "./StrategyTab";
 import { TradeNotesTab } from "./TradeNotesTab";
 import { AdjustPositionTab } from "./AdjustPositionTab";
 import { getCustomFieldNames } from "@/server/actions/user";
+import { useAppSelector } from "@/redux/store";
 
 interface TradeDialogProps {
     editMode?: boolean;
@@ -23,6 +24,7 @@ interface TradeDialogProps {
     onRequestClose?: () => void;
     initialTab?: "open-details" | "close-details" | "strategy" | "notes" | "adjust-position";
     prefilledQtyChange?: number;
+    initialAdjustMode?: "add" | "reduce" | "close";
 }
 
 export const TradeDialog = ({
@@ -32,8 +34,30 @@ export const TradeDialog = ({
     onRequestClose,
     initialTab = "open-details",
     prefilledQtyChange,
+    initialAdjustMode,
 }: TradeDialogProps) => {
     const [activeTab, setActiveTab] = useState(initialTab);
+    const [adjustTargetTrade, setAdjustTargetTrade] = useState<Trades | null>(existingTrade || null);
+    const [adjustMode, setAdjustMode] = useState<"add" | "reduce" | "close">(initialAdjustMode || (prefilledQtyChange && prefilledQtyChange < 0 ? "reduce" : "add"));
+    const [isFromNewTradeFlow, setIsFromNewTradeFlow] = useState(false);
+
+    useEffect(() => {
+        if (initialTab) {
+            setActiveTab(initialTab);
+        }
+    }, [initialTab]);
+
+    useEffect(() => {
+        if (initialAdjustMode) {
+            setAdjustMode(initialAdjustMode);
+        }
+    }, [initialAdjustMode]);
+
+    useEffect(() => {
+        if (existingTrade) {
+            setAdjustTargetTrade(existingTrade);
+        }
+    }, [existingTrade]);
 
     const tradeForm = useTradeForm({
         editMode,
@@ -59,13 +83,40 @@ export const TradeDialog = ({
         fetchFieldNames();
     }, [fetchFieldNames]);
 
-    if (activeTab === "adjust-position" && existingTrade) {
+    const handleSelectExistingPosition = (targetTrade: Trades, selectedMode: "add" | "reduce" | "close") => {
+        setAdjustTargetTrade(targetTrade);
+        setAdjustMode(selectedMode);
+        setIsFromNewTradeFlow(true);
+        setActiveTab("adjust-position");
+    };
+
+    const tradesInStore = useAppSelector((state) => state.tradeRecords.listOfTrades);
+    const formSymbol = (tradeForm.form.watch("symbolName") || "").trim().toUpperCase();
+    const formPositionType = (tradeForm.form.watch("positionType") || "").toLowerCase();
+
+    const hasMatchingActiveTrade = useMemo(() => {
+        if (editMode || !formSymbol || !formPositionType || !tradesInStore) return false;
+        return tradesInStore.some((t) => {
+            const isActive = t.isActiveTrade !== false && (!t.closeDate || t.closeDate === "");
+            return isActive &&
+                   (t.symbolName || "").trim().toUpperCase() === formSymbol &&
+                   (t.positionType || "").toLowerCase() === formPositionType;
+        });
+    }, [editMode, formSymbol, formPositionType, tradesInStore]);
+
+    if (activeTab === "adjust-position" && (adjustTargetTrade || existingTrade)) {
+        const tradeToAdjust = adjustTargetTrade || existingTrade!;
         return (
             <div className="sm:max-w-[460px] flex flex-col flex-1 h-full overflow-hidden">
                 <AdjustPositionTab
-                    existingTrade={existingTrade}
+                    existingTrade={tradeToAdjust}
                     onRequestClose={onRequestClose}
                     prefilledQtyChange={prefilledQtyChange}
+                    initialAdjustMode={adjustMode}
+                    onBackToNewTrade={isFromNewTradeFlow ? () => {
+                        setActiveTab("open-details");
+                        setIsFromNewTradeFlow(false);
+                    } : undefined}
                 />
             </div>
         );
@@ -107,12 +158,14 @@ export const TradeDialog = ({
                             userFieldNames={openFieldNames}
                             onFieldNamesChange={fetchFieldNames}
                             editMode={editMode}
+                            existingTrade={existingTrade}
                             validationState={tradeForm.validationState}
                             validationPrice={tradeForm.validationPrice}
                             setValidationState={tradeForm.setValidationState}
                             setValidationPrice={tradeForm.setValidationPrice}
                             bypassValidation={tradeForm.bypassValidation}
                             setBypassValidation={tradeForm.setBypassValidation}
+                            onSelectExistingPosition={handleSelectExistingPosition}
                         />
                     </TabsContent>
 
@@ -166,7 +219,9 @@ export const TradeDialog = ({
                             </DialogClose>
                             <div
                                 title={
-                                    tradeForm.validationState === "invalid" && !tradeForm.bypassValidation
+                                    !editMode && hasMatchingActiveTrade
+                                        ? "An open position already exists. Use Add to Pos / Reduce Pos / Close Pos to adjust it."
+                                        : !editMode && tradeForm.validationState === "invalid" && !tradeForm.bypassValidation
                                         ? "Symbol has no market data. Price tracking will be unavailable."
                                         : undefined
                                 }
@@ -177,7 +232,8 @@ export const TradeDialog = ({
                                     disabled={
                                         tradeForm.submittingTrade ||
                                         tradeForm.validationState === "validating" ||
-                                        (tradeForm.validationState === "invalid" && !tradeForm.bypassValidation)
+                                        (!editMode && tradeForm.validationState === "invalid" && !tradeForm.bypassValidation) ||
+                                        (!editMode && hasMatchingActiveTrade)
                                     }
                                 >
                                     {editMode ? "Update Trade" : "Add Trade"}

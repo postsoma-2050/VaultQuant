@@ -131,7 +131,7 @@ export function JournalSidebar({ dates }: JournalSidebarProps) {
                     className="flex items-center justify-center gap-2 w-full py-2 mb-3 text-xs font-semibold bg-zinc-900 text-white hover:bg-zinc-800 rounded-md transition-colors shadow-sm text-center"
                 >
                     <Plus className="w-3.5 h-3.5" />
-                    Write Today's Entry
+                    Write Today&apos;s Entry
                 </Link>
                 <div className="relative mb-4 px-1.5">
                     <Search className="absolute left-3.5 top-2.5 h-3.5 w-3.5 text-zinc-400" />

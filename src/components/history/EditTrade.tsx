@@ -9,7 +9,8 @@ import { Sheet, SheetContent, SheetTrigger } from "../ui/sheet";
 interface EditTradeProps {
     trade?: Trades;
     existingTrade?: Trades;
-    initialTab?: "open-details" | "close-details" | "strategy" | "notes";
+    initialTab?: "open-details" | "close-details" | "strategy" | "notes" | "adjust-position";
+    initialAdjustMode?: "add" | "reduce" | "close";
     trigger?: ReactNode;
 }
 
@@ -17,6 +18,7 @@ export default function EditTrade({
     trade, 
     existingTrade, 
     initialTab = "open-details",
+    initialAdjustMode,
     trigger 
 }: EditTradeProps) {
     const [isOpen, setIsOpen] = useState(false);
@@ -48,6 +50,7 @@ export default function EditTrade({
                     existingTrade={tradeData}
                     day={undefined}
                     initialTab={initialTab}
+                    initialAdjustMode={initialAdjustMode}
                     onRequestClose={() => setIsOpen(false)}
                 />
             </SheetContent>

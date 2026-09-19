@@ -1,26 +1,5 @@
 import dayjs from "dayjs";
 
-// export const getMonth = (month = dayjs().month(), year = dayjs().year()) => {
-//     const firstDayOfTheMonth = dayjs()
-//         .set("month", month)
-//         .startOf("month")
-//         .day();
-
-//     const daysInMonth = dayjs()
-//         .set("year", year)
-//         .set("month", month)
-//         .daysInMonth();
-//     const totalCells = firstDayOfTheMonth + daysInMonth;
-//     const totalRows = Math.ceil(totalCells / 7);
-
-//     let dayCounter = 1 - firstDayOfTheMonth;
-
-//     return Array.from({ length: totalRows }, () =>
-//         Array.from({ length: 7 }, () =>
-//             dayjs(new Date(year, month, dayCounter++))
-//         )
-//     );
-// };
 
 export const getMonth = (month = dayjs().month(), year = dayjs().year()) => {
     const firstDayOfTheMonth = dayjs()

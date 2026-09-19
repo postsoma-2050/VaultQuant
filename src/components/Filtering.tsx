@@ -30,7 +30,6 @@ export default function Filtering({
     isStatisticsPage: boolean;
 }) {
     const [instrumentLabels, setInstrumentLabels] = useState<string[]>([]);
-    const [removedItems, setRemovedItems] = useState<string[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [dateRange, setDateRange] = useState<DateRange | null>(null);
 
@@ -63,7 +62,7 @@ export default function Filtering({
             ]);
         }
         dispatch(setFilteredTrades(trades));
-    }, [trades]);
+    }, [trades, dispatch]);
 
     // Handle date filter side-effects
     useEffect(() => {
@@ -71,7 +70,6 @@ export default function Filtering({
 
         if (dateRange === null) {
             setInstrumentLabels(allSymbols);
-            setRemovedItems([]);
             dispatch(setFilteredTrades(trades));
             return;
         }
@@ -92,25 +90,20 @@ export default function Filtering({
         ];
 
         setInstrumentLabels(newLabels);
-        setRemovedItems([]);
         dispatch(setFilteredTrades(filteredTrades));
-    }, [trades, dateRange]);
+    }, [trades, dateRange, allSymbols, dispatch]);
 
     const removeInstrumentFromList = (instrument: string) => {
         const updatedLabels = instrumentLabels.filter(
             (item) => item !== instrument
         );
         setInstrumentLabels(updatedLabels);
-        setRemovedItems((prev) => [...prev, instrument]);
-
         applyFilteredTrades(updatedLabels);
     };
 
     const addInstrumentToTheList = (instrument: string) => {
         const updatedLabels = [...instrumentLabels, instrument];
         setInstrumentLabels(updatedLabels);
-        setRemovedItems((prev) => prev.filter((item) => item !== instrument));
-
         applyFilteredTrades(updatedLabels);
     };
 
@@ -140,13 +133,11 @@ export default function Filtering({
 
     const handleSelectAll = () => {
         setInstrumentLabels(allSymbols);
-        setRemovedItems([]);
         applyFilteredTrades(allSymbols);
     };
 
     const handleClearAll = () => {
         setInstrumentLabels([]);
-        setRemovedItems(allSymbols);
         applyFilteredTrades([]);
     };
 
@@ -155,7 +146,6 @@ export default function Filtering({
         dispatch(setSortBy(undefined));
         dispatch(setTimeframe("allHistory"));
         setInstrumentLabels(allSymbols);
-        setRemovedItems([]);
         dispatch(setFilteredTrades(trades));
     };
 

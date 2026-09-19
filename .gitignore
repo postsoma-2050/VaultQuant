@@ -48,3 +48,4 @@ sqlite.db
 # scratch and test scripts with personal paths
 scratch/
 check_db.js
+artifacts/

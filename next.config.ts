@@ -15,7 +15,6 @@ const nextConfig: NextConfig = {
         optimizePackageImports: [
             "@mui/material",
             "@mui/x-charts",
-            "@mui/x-date-pickers",
             "lucide-react",
         ],
     },

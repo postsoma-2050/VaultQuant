@@ -77,13 +77,14 @@ function extractSummary(content: unknown, maxLen = 60): string {
     if (!content || typeof content !== "object") return "";
     let text = "";
 
-    const recurse = (node: any) => {
-        if (!node) return;
-        if (node.type === "text" && typeof node.text === "string") {
-            text += " " + node.text;
+    const recurse = (node: unknown) => {
+        if (!node || typeof node !== "object") return;
+        const n = node as { type?: string; text?: string; content?: unknown[] };
+        if (n.type === "text" && typeof n.text === "string") {
+            text += " " + n.text;
         }
-        if (node.content && Array.isArray(node.content)) {
-            for (const child of node.content) {
+        if (Array.isArray(n.content)) {
+            for (const child of n.content) {
                 recurse(child);
                 if (text.trim().length >= maxLen) break;
             }

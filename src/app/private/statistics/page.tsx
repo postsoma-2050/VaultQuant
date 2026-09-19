@@ -1,6 +1,5 @@
 "use client";
 
-import AddCapitalDialog from "@/components/statistics/AddCapitalDialog";
 import OdometerConditionalRendering from "@/components/statistics/OdometerConditionalRendering";
 import { StatsGridPageOne } from "@/components/StatsGridPageOne";
 import { StatsGridPageTwo } from "@/components/StatsGridPageTwo";
@@ -11,25 +10,13 @@ import {
 } from "@/features/statistics/getDataForSummary";
 import { useAppSelector } from "@/redux/store";
 import { getCapital } from "@/server/actions/user";
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useMarketPrices } from "@/hooks/useMarketPrices";
 
 export default function Page() {
     const [start, setStart] = useState<string | undefined>();
-    const buttonRef = useRef<HTMLDivElement | null>(null);
-
     const [isSwitchChartsActive, setIsSwitchChartsActive] = useState(false);
 
-    const handleSwitch = () => {
-        if (buttonRef.current && !isSwitchChartsActive) {
-            buttonRef.current.style.boxShadow =
-                "0 0 0 1px #70451a3d, 0 1px 2px #70451a0d, 2px 3px 5px #70451a29, 4px 6px 5px #70451a14, 8px 12px 8px #70451a14,8px 0 0.5px #70451a33 inset, 20px 20px 25px 25px #70451a33 inset";
-        } else if (buttonRef.current && isSwitchChartsActive) {
-            buttonRef.current.style.boxShadow =
-                "0 0 0 1px #70451a3d, 0 1px 2px #70451a0d, 2px 3px 5px #70451a29, 4px 6px 5px #70451a14, 8px 12px 8px #70451a14,8px 0 0.5px #70451a33 inset, 10px 0 4px -6px #70451a33 inset";
-        }
-        setIsSwitchChartsActive((prev) => !prev);
-    };
 
     const trades = useAppSelector((state) => state.tradeRecords.listOfTrades);
     // Statistics always operates on the full trade history so that Account

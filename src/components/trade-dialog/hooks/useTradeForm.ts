@@ -41,7 +41,7 @@ export const useTradeForm = ({ editMode = false, existingTrade, day, onRequestCl
     const [checkedCloseRules, setCheckedCloseRules] = useState<string[]>([]);
     const [validationState, setValidationState] = useState<"idle" | "validating" | "valid" | "invalid">("idle");
     const [validationPrice, setValidationPrice] = useState<number | undefined>(undefined);
-    const [bypassValidation, setBypassValidation] = useState(false);
+    const [bypassValidation, setBypassValidation] = useState(editMode);
 
     const router = useRouter();
     const dispatch = useAppDispatch();

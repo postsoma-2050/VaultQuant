@@ -1,9 +1,10 @@
 import { Trades } from "@/types";
+import dayjs from "dayjs";
 
 type TradeDetails = { result: number; win: number; lost: number };
 
-function getDateKey(date: Date): string {
-    return date.toLocaleDateString("en-GB").split("/").join("-");
+function getDateKey(dateInput: string | Date): string {
+    return dayjs(dateInput).format("DD-MM-YYYY");
 }
 
 function addTradeToDay(
@@ -31,22 +32,18 @@ export function getTradeDetailsForEachDay(data: Trades[]): {
 } {
     return data.reduce(
         (acc: { [key: string]: TradeDetails }, trade) => {
-            // Process partial closes (closeEvents) - each on its own date
+            // Process partial closes and adjustments (closeEvents) - each on its own date
             if (trade.closeEvents && trade.closeEvents.length > 0) {
                 for (const event of trade.closeEvents) {
-                    if (!event.date || !Number.isFinite(event.result)) continue;
-                    const eventDate = new Date(event.date);
-                    const dateKey = getDateKey(eventDate);
+                    if (!event.date || event.result === undefined || !Number.isFinite(event.result)) continue;
+                    const dateKey = getDateKey(event.date);
                     addTradeToDay(acc, dateKey, event.result);
                 }
-            }
-
-            // Process final close (if trade is fully closed with closeDate and result)
-            if (trade.closeDate) {
+            } else if (trade.closeDate) {
+                // Legacy close without closeEvents
                 const numericResult = Number(trade.result);
                 if (Number.isFinite(numericResult) && numericResult !== 0) {
-                    const closeDate = new Date(trade.closeDate);
-                    const dateKey = getDateKey(closeDate);
+                    const dateKey = getDateKey(trade.closeDate);
                     addTradeToDay(acc, dateKey, numericResult);
                 }
             }
