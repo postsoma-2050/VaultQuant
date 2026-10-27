@@ -1,100 +1,44 @@
 "use client";
 
 import { CustomButton } from "@/components/CustomButton";
-import CustomLoading from "@/components/CustomLoading";
 import AddStrategyDialog from "@/components/strategies/AddStrategyDialog";
 import SearchStrategy from "@/components/strategies/SearchStrategy";
 import SlidingTabs from "@/components/strategies/SlidingTabs";
 import StrategyPageClientSideRenderig from "@/components/strategies/StrategyPageClientSideRenderig";
-import { getAllStrategies } from "@/server/actions/strategies";
-import {
-    GetStrategiesError,
-    GetStrategiesResult,
-    GetStrategiesSuccess,
-} from "@/types/strategies.types";
-import Link from "next/link";
-import { Shield } from "lucide-react";
-import React, { useState, useEffect } from "react";
-
-function isGetStrategiesSuccess(
-    result: GetStrategiesResult
-): result is GetStrategiesSuccess {
-    return result.success === true && "strategies" in result;
-}
-
-function isGetStrategiesError(
-    result: GetStrategiesResult
-): result is GetStrategiesError {
-    return result.success === false && "error" in result;
-}
+import { useState } from "react";
 
 export default function StrategiesPage() {
-    const [strategies, setStrategies] = useState<GetStrategiesResult | null>(null);
     const [hideAll, setHideAll] = useState(false);
 
-    useEffect(() => {
-        getAllStrategies().then(setStrategies);
-    }, []);
-    if (!strategies) return <div className="flex h-full items-center justify-center">
-        <CustomLoading />
-    </div>
-
-    if (isGetStrategiesError(strategies)) {
-        // Check if it's the profile completion error
-        if (strategies.error.includes("complete your profile")) {
-            return (
-                <div className="flex flex-col h-full items-center justify-center space-y-4 px-8">
-                    <div className="text-center space-y-2">
-                        <h2 className="text-2xl font-semibold">Complete Your Profile First</h2>
-                        <p className="text-gray-600 max-w-md">
-                            To create and manage trading strategies, you need to complete your profile by adding your starting capital.
-                        </p>
-                    </div>
-                    <Link href="/private/statistics">
-                        <CustomButton isBlack={true}>
-                            Set Starting Capital in Statistics
-                        </CustomButton>
-                    </Link>
-                </div>
-            );
-        }
-        return <div>Error loading strategies: {strategies.error}</div>;
-    }
-
-    if (!isGetStrategiesSuccess(strategies)) {
-        return <div>Unexpected response format.</div>;
-    }
     return (
-        <div className="flex flex-col h-full">
-            <div className="px-2 md:px-8 pt-6 pb-0 border-b border-neutral-200 md:space-y-4 2xl:space-y-8">
-                <div className="flex items-center justify-between">
+        <div className="flex h-full min-h-0 flex-col">
+            <div className="shrink-0 px-4 pt-4 border-b border-zinc-200">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-zinc-900 flex items-center justify-center text-white shadow-xs shrink-0">
-                            <Shield className="w-5 h-5 text-white" />
-                        </div>
                         <div>
-                            <h1 className="text-2xl md:text-3xl font-bold text-neutral-900">Trading Strategies</h1>
-                            <p className="text-sm text-neutral-500 mt-1">Manage and track your trading rules</p>
+                            <h1 className="text-xl font-semibold text-zinc-900">Strategies</h1>
+                            <p className="text-[13px] text-zinc-500">Define the rules you want to follow.</p>
                         </div>
                     </div>
                     <AddStrategyDialog />
                 </div>
-                <div className="flex flex-col md:flex-row gap-4 md:gap-0 justify-between">
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                     <SlidingTabs />
 
-                    <div className="flex items-center gap-4 mb-2 md:mb-0">
+                    <div className="flex min-w-0 items-center gap-2 pb-2">
                         <SearchStrategy />
-                        <CustomButton isBlack={false} onClick={() => setHideAll(!hideAll)}>
+                        <CustomButton
+                            isBlack={false}
+                            className="h-8 px-2.5 text-[13px]"
+                            onClick={() => setHideAll((value) => !value)}
+                        >
                             {hideAll ? "Show all" : "Hide all"}
                         </CustomButton>
                     </div>
 
                 </div>
             </div>
-            <StrategyPageClientSideRenderig
-                strategies={strategies.strategies}
-                hideAll={hideAll}
-            />
+            <StrategyPageClientSideRenderig hideAll={hideAll} />
         </div >
     );
 }

@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { BookOpen, Trash2, ChevronDown, ChevronRight, RefreshCw, XCircle, PlusCircle, MinusCircle, Pencil, Layers, Calendar } from "lucide-react";
-import { FaArrowTrendDown, FaArrowTrendUp } from "react-icons/fa6";
 
 import { Trades } from "@/types";
 import {
@@ -52,11 +51,16 @@ const formatPrice = (price: number | string): string => {
     });
 };
 
-const formatCurrency = (val: number): string => {
-    return val.toLocaleString("en-US", {
+const formatCurrency = (val: number, showSign = false): string => {
+    if (!Number.isFinite(val)) return "$0.00";
+    const isNegative = val < 0;
+    const formatted = Math.abs(val).toLocaleString("en-US", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     });
+    if (isNegative) return `-$${formatted}`;
+    if (showSign && val > 0) return `+$${formatted}`;
+    return `$${formatted}`;
 };
 
 export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
@@ -108,7 +112,7 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
 
     if (!aggregatedPositions || aggregatedPositions.length === 0) {
         return (
-            <div className="border border-zinc-200/80 rounded-xl p-8 text-center text-zinc-500 bg-white shadow-xs">
+            <div className="border border-zinc-200 rounded-lg p-8 text-center text-zinc-500 bg-white">
                 No open trades yet
             </div>
         );
@@ -131,71 +135,71 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
     const totalROIPercent = totalPositionCost > 0 ? (totalUnrealizedPnL / totalPositionCost) * 100 : 0;
 
     return (
-        <div className="flex flex-col gap-4 pt-4">
+        <div className="flex flex-col gap-4 pt-2 w-full min-w-0">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="border border-zinc-200/80 rounded-xl p-4 bg-white shadow-xs hover:border-zinc-300 transition-colors">
+                <div className="border border-zinc-200 rounded-lg p-4 bg-white">
                     <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Active Positions</p>
-                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200/60">
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                            Unified
+                        <p className="text-[13px] font-medium text-zinc-500">Open positions</p>
+                        <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500">
+                            <span className={`w-1.5 h-1.5 rounded-full ${lastUpdated ? "bg-emerald-500" : "bg-zinc-300"}`} aria-hidden="true" />
+                            {lastUpdated ? "Prices current" : "Prices unavailable"}
                         </span>
                     </div>
                     <div className="flex items-baseline gap-2 mt-2">
-                        <p className="text-2xl font-bold text-zinc-800 font-mono tabular-nums">
+                        <p className="text-2xl font-semibold text-zinc-900 font-mono tabular-nums">
                             {aggregatedPositions.length}
                         </p>
-                        <div className="flex items-center gap-1 text-[11px] text-zinc-400 font-medium">
+                        <div className="flex items-center gap-1 text-xs text-zinc-500">
                             <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin text-blue-500" : ""}`} />
                             <span>
-                                {lastUpdated ? `Refreshed ${relativeTime}` : "Connecting..."}
+                                {lastUpdated ? `Updated ${relativeTime}` : "Connecting..."}
                             </span>
                         </div>
                     </div>
                 </div>
 
-                <div className="border border-zinc-200/80 rounded-xl p-4 bg-white shadow-xs hover:border-zinc-300 transition-colors">
+                <div className="border border-zinc-200 rounded-lg p-4 bg-white">
                     <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Total Position Value</p>
-                        <span className="text-[11px] font-medium font-mono tabular-nums text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md border border-zinc-200/60">
-                            Cost: ${formatCurrency(totalPositionCost)}
+                        <p className="text-[13px] font-medium text-zinc-500">Position value</p>
+                        <span className="text-xs font-medium font-mono tabular-nums text-zinc-500">
+                            Cost {formatCurrency(totalPositionCost)}
                         </span>
                     </div>
-                    <p className="text-2xl font-bold text-zinc-800 font-mono tabular-nums mt-2">
-                        ${formatCurrency(totalPositionValue)}
+                    <p className="text-2xl font-semibold text-zinc-900 font-mono tabular-nums mt-1.5">
+                        {formatCurrency(totalPositionValue)}
                     </p>
                 </div>
 
-                <div className="border border-zinc-200/80 rounded-xl p-4 bg-white shadow-xs hover:border-zinc-300 transition-colors">
+                <div className="border border-zinc-200 rounded-lg p-4 bg-white">
                     <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Total Unrealized P/L</p>
+                        <p className="text-[13px] font-medium text-zinc-500">Unrealized P/L</p>
                         {totalPositionCost > 0 && (
-                            <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full font-mono tabular-nums ${
+                            <span className={`text-xs font-medium font-mono tabular-nums ${
                                 totalUnrealizedPnL >= 0 
-                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60" 
-                                    : "bg-rose-50 text-rose-700 border border-rose-200/60"
+                                    ? "text-emerald-700"
+                                    : "text-rose-700"
                             }`}>
                                 {totalUnrealizedPnL >= 0 ? "+" : ""}{totalROIPercent.toFixed(2)}%
                             </span>
                         )}
                     </div>
-                    <p className={`text-2xl font-bold font-mono tabular-nums mt-2 ${totalUnrealizedPnL >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                        {totalUnrealizedPnL >= 0 ? "+" : ""}${formatCurrency(totalUnrealizedPnL)}
+                    <p className={`text-2xl font-semibold font-mono tabular-nums mt-1.5 ${totalUnrealizedPnL >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                        {formatCurrency(totalUnrealizedPnL, true)}
                     </p>
                 </div>
             </div>
 
-            <div className="border border-zinc-200/80 rounded-xl bg-white overflow-hidden shadow-xs w-full max-w-none">
-                <div className="grid grid-cols-12 gap-2 px-4 py-3 bg-zinc-50/80 border-b border-zinc-200 text-xs font-semibold uppercase tracking-wider text-zinc-500 w-full">
-                    <div className="col-span-5 md:col-span-3">Position / Symbol</div>
-                    <div className="col-span-2 text-center hidden md:block">Avg Entry (VWAP)</div>
-                    <div className="col-span-2 text-center hidden md:block">Mark Price</div>
-                    <div className="col-span-1 text-center hidden md:block">Total Qty</div>
-                    <div className="col-span-4 md:col-span-2 text-center">Unreal. P&L (%)</div>
-                    <div className="col-span-3 md:col-span-2 text-right">Actions</div>
+            <div className="border border-zinc-200 rounded-lg bg-white overflow-hidden w-full min-w-0 max-w-none">
+                <div className="grid grid-cols-20 gap-2 px-3 py-2.5 bg-zinc-50 border-b border-zinc-200 text-xs font-medium text-zinc-500 w-full">
+                    <div className="col-span-8 xl:col-span-4">Position / Symbol</div>
+                    <div className="col-span-3 text-center hidden xl:block">Avg Entry (VWAP)</div>
+                    <div className="col-span-3 text-center hidden xl:block">Mark Price</div>
+                    <div className="col-span-2 text-right pr-3 hidden xl:block">Total Qty</div>
+                    <div className="col-span-7 xl:col-span-3 text-right pr-3">Unreal. P&amp;L (%)</div>
+                    <div className="col-span-5 xl:col-span-5 text-right">Actions</div>
                 </div>
 
-                <div className="max-h-[65vh] overflow-y-auto divide-y divide-zinc-100 w-full">
+                <div className="divide-y divide-zinc-100 w-full">
                     {aggregatedPositions.map((pos) => {
                         const isExpanded = expandedPositionKey === pos.key;
                         const currentPrice = prices[pos.symbolName] ?? null;
@@ -206,80 +210,68 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
                         return (
                             <div key={pos.key} className="hover:bg-zinc-50/80 transition-colors w-full">
                                 <div
-                                    className="grid grid-cols-12 gap-2 px-4 py-3.5 items-center w-full cursor-pointer"
-                                    onClick={() => toggleExpanded(pos.key)}
+                                    className="grid grid-cols-20 gap-2 px-3 py-3 items-center w-full"
                                 >
-                                    <div className="col-span-5 md:col-span-3 flex items-center gap-2">
-                                        <button className="shrink-0 text-zinc-400 hover:text-zinc-600 transition-colors">
+                                    <div className="col-span-8 xl:col-span-4 flex min-w-0 items-center gap-2">
+                                        <button
+                                            type="button"
+                                            aria-expanded={isExpanded}
+                                            aria-label={`${isExpanded ? "Collapse" : "Expand"} ${pos.symbolName} position details`}
+                                            onClick={() => toggleExpanded(pos.key)}
+                                            className="shrink-0 rounded p-0.5 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+                                        >
                                             {isExpanded ? (
-                                                <ChevronDown className="w-4 h-4" />
+                                                <ChevronDown className="w-4 h-4" aria-hidden="true" />
                                             ) : (
-                                                <ChevronRight className="w-4 h-4" />
+                                                <ChevronRight className="w-4 h-4" aria-hidden="true" />
                                             )}
                                         </button>
-                                        {isBuy ? (
-                                            <span className="border border-emerald-300 text-emerald-700 bg-emerald-50 text-[11px] font-mono font-bold w-5 h-5 flex items-center justify-center rounded shrink-0">
-                                                L
-                                            </span>
-                                        ) : (
-                                            <span className="border border-rose-300 text-rose-700 bg-rose-50 text-[11px] font-mono font-bold w-5 h-5 flex items-center justify-center rounded shrink-0">
-                                                S
-                                            </span>
-                                        )}
+                                        <span className={`font-mono text-xs font-semibold shrink-0 ${isBuy ? "text-emerald-700" : "text-rose-700"}`}>
+                                            {isBuy ? "Long" : "Short"}
+                                        </span>
                                         <div className="flex flex-col min-w-0">
-                                            <div className="flex items-center gap-1.5 flex-wrap">
-                                                <span className="font-bold text-sm text-zinc-800 tracking-tight whitespace-nowrap">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <span className="font-semibold text-[13px] text-zinc-900 truncate">
                                                     {pos.symbolName}
                                                 </span>
                                                 {pos.allEvents.length > 1 && (
-                                                    <span className="border border-zinc-200 text-zinc-600 bg-zinc-100/90 text-[10px] font-mono px-1.5 py-0.5 rounded font-semibold shrink-0" title={`${pos.allEvents.length} activities recorded for this position`}>
-                                                        {pos.allEvents.length} activities
+                                                    <span className="text-xs text-zinc-500 shrink-0">
+                                                        {pos.allEvents.length} events
                                                     </span>
                                                 )}
                                             </div>
-                                            <span className="text-[11px] text-zinc-400 font-medium md:hidden">
-                                                {new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" }).format(new Date(pos.openDate))}
+                                            <span className="text-xs text-zinc-500 xl:hidden">
+                                                {new Intl.DateTimeFormat("en-US", { day: "2-digit", month: "short" }).format(new Date(pos.openDate))}
                                             </span>
                                         </div>
                                     </div>
 
-                                    <div className="col-span-2 hidden md:block text-center text-sm font-mono tabular-nums text-zinc-700 font-semibold">
+                                    <div className="col-span-3 hidden xl:block text-center text-[13px] font-mono tabular-nums text-zinc-700 font-semibold">
                                         ${formatPrice(pos.avgEntryPrice)}
                                     </div>
 
-                                    <div className="col-span-2 hidden md:block text-center text-sm font-mono tabular-nums text-zinc-700">
+                                    <div className="col-span-3 hidden xl:block text-center text-[13px] font-mono tabular-nums text-zinc-700">
                                         {currentPrice !== null ? (
-                                            <span className="inline-flex items-center gap-1">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" title="Live price" />
-                                                ${formatPrice(currentPrice)}
-                                            </span>
+                                            <span>${formatPrice(currentPrice)}</span>
                                         ) : (
                                             <span className="text-zinc-300">—</span>
                                         )}
                                     </div>
 
-                                    <div className="col-span-1 hidden md:block text-center text-sm font-mono tabular-nums text-zinc-700 font-medium">
+                                    <div className="col-span-2 hidden xl:block text-right pr-3 text-[13px] font-mono tabular-nums text-zinc-700">
                                         {formatQty(pos.totalQuantity)}
                                     </div>
 
-                                    <div className="col-span-4 md:col-span-2 text-center text-sm font-mono tabular-nums">
+                                    <div className="col-span-7 xl:col-span-3 text-right pr-3 text-[13px] font-mono tabular-nums">
                                         {pnl !== null && pnlPercent !== null ? (
-                                            <div className="flex flex-col items-center justify-center">
-                                                <div className="flex items-center gap-1 font-bold">
-                                                    {pnl >= 0 ? (
-                                                        <FaArrowTrendUp className="text-emerald-600 text-xs" />
-                                                    ) : (
-                                                        <FaArrowTrendDown className="text-rose-600 text-xs" />
-                                                    )}
-                                                    <span className={pnl >= 0 ? "text-emerald-600" : "text-rose-600"}>
-                                                        {pnl >= 0 ? "+" : ""}
-                                                        ${formatCurrency(pnl)}
-                                                    </span>
-                                                </div>
-                                                <span className={`text-[11px] font-semibold px-1.5 py-0.2 rounded mt-0.5 ${
+                                            <div className="flex flex-col items-end justify-center">
+                                                <span className={`font-semibold ${pnl >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                                                    {formatCurrency(pnl, true)}
+                                                </span>
+                                                <span className={`text-xs font-medium mt-0.5 ${
                                                     pnl >= 0 
-                                                        ? "text-emerald-700 bg-emerald-50 border border-emerald-200/60" 
-                                                        : "text-rose-700 bg-rose-50 border border-rose-200/60"
+                                                        ? "text-emerald-700"
+                                                        : "text-rose-700"
                                                 }`}>
                                                     {pnlPercent >= 0 ? "+" : ""}{pnlPercent.toFixed(2)}%
                                                 </span>
@@ -289,8 +281,7 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
                                         )}
                                     </div>
 
-                                    <div className="col-span-3 md:col-span-2 flex items-center justify-end gap-1.5 shrink-0 pl-2" onClick={(e) => e.stopPropagation()}>
-                                        {/* Primary Action: + Add */}
+                                    <div className="col-span-5 flex items-center justify-end gap-1 shrink-0">
                                         <button
                                             type="button"
                                             onClick={() => {
@@ -300,20 +291,19 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
                                                 }
                                                 setAdjustSheetState({ trade: primaryTrade, mode: "add" });
                                             }}
-                                            className="px-2.5 py-1 text-xs font-semibold rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 flex items-center gap-1 transition-colors shrink-0 shadow-2xs cursor-pointer"
-                                            title="Add to Position (Scale In / 补仓)"
+                                            className="px-2 py-1 text-xs font-medium rounded-md bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-200 flex items-center gap-1 transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+                                            aria-label={`Add to ${pos.symbolName} position`}
                                         >
                                             <PlusCircle className="w-3.5 h-3.5" />
                                             <span>Add</span>
                                         </button>
 
-                                        {/* Secondary Actions: Manage ▾ Dropdown Menu */}
                                         <Popover open={openManageMenuKey === pos.key} onOpenChange={(open) => setOpenManageMenuKey(open ? pos.key : null)}>
                                             <PopoverTrigger asChild>
                                                 <button
                                                     type="button"
-                                                    className="px-2 py-1 text-xs font-medium rounded-md bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-200 flex items-center gap-1 transition-colors shrink-0 shadow-2xs cursor-pointer"
-                                                    title="Manage Position"
+                                                    className="px-2 py-1 text-xs font-medium rounded-md bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-200 flex items-center gap-1 transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+                                                    aria-label={`Manage ${pos.symbolName} position`}
                                                 >
                                                     <span>Manage</span>
                                                     <ChevronDown className="w-3 h-3 text-zinc-500" />
@@ -380,7 +370,7 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
                                                             <span>Trade Notes</span>
                                                         </div>
                                                         {primaryTrade?.notes && parseTradeNotes(primaryTrade.notes, primaryTrade.openDate, primaryTrade.id).length > 0 && (
-                                                            <span className="text-[10px] font-semibold bg-orange-100 text-orange-700 px-1.5 py-0.2 rounded-full">
+                                                            <span className="text-xs font-medium text-orange-700">
                                                                 {parseTradeNotes(primaryTrade.notes, primaryTrade.openDate, primaryTrade.id).length}
                                                             </span>
                                                         )}
@@ -409,54 +399,52 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
                                 </div>
 
                                 {isExpanded && (
-                                    <div className="bg-zinc-50/90 border-t border-zinc-100 px-4 py-3.5 space-y-4">
-                                        {/* Position Actions Toolbar */}
-                                        <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-white border border-zinc-200/80 rounded-lg shadow-2xs">
+                                    <div className="bg-zinc-50 border-t border-zinc-100 px-3 py-3 space-y-4">
+                                        <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-white border border-zinc-200 rounded-md">
                                             <div className="flex items-center gap-2">
-                                                <span className="text-xs font-semibold text-zinc-700">Quick Actions:</span>
+                                                <span className="text-xs font-medium text-zinc-600">Actions</span>
                                                 {pos.isMultiple ? (
-                                                    <span className="text-[11px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 font-medium">
-                                                        {pos.constituentTrades.length} lots consolidated • Scale operations apply to Primary Lot #{primaryTrade.id.slice(0, 8)}
+                                                    <span className="text-xs text-zinc-500">
+                                                        {pos.constituentTrades.length} lots · changes apply to the primary lot
                                                     </span>
                                                 ) : (
-                                                    <span className="text-[11px] text-zinc-500 font-mono">
-                                                        Lot #{primaryTrade.id.slice(0, 8)}
+                                                    <span className="text-xs text-zinc-500 font-mono">
+                                                        Lot {primaryTrade.id.slice(0, 8)}
                                                     </span>
                                                 )}
                                             </div>
-                                            <div className="flex items-center gap-1.5">
+                                            <div className="flex flex-wrap items-center gap-1.5">
                                                 <button
                                                     type="button"
                                                     onClick={() => setAdjustSheetState({ trade: primaryTrade, mode: "add" })}
-                                                    className="px-2.5 py-1 text-xs font-semibold rounded-md bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
+                                                    className="px-2.5 py-1 text-xs font-medium rounded-md bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-200 flex items-center gap-1 transition-colors"
                                                 >
                                                     <PlusCircle className="w-3.5 h-3.5" />
-                                                    <span>Add to Position</span>
+                                                    <span>Add</span>
                                                 </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => setAdjustSheetState({ trade: primaryTrade, mode: "reduce" })}
-                                                    className="px-2.5 py-1 text-xs font-semibold rounded-md bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
+                                                    className="px-2.5 py-1 text-xs font-medium rounded-md bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-200 flex items-center gap-1 transition-colors"
                                                 >
                                                     <MinusCircle className="w-3.5 h-3.5" />
-                                                    <span>Reduce Position</span>
+                                                    <span>Reduce</span>
                                                 </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => setAdjustSheetState({ trade: primaryTrade, mode: "close" })}
-                                                    className="px-2.5 py-1 text-xs font-semibold rounded-md bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
+                                                    className="px-2.5 py-1 text-xs font-medium rounded-md bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1 transition-colors"
                                                 >
                                                     <XCircle className="w-3.5 h-3.5" />
-                                                    <span>Close Position</span>
+                                                    <span>Close</span>
                                                 </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => setEditInitialTrade(primaryTrade)}
-                                                    className="px-2 py-1 text-xs font-medium rounded-md bg-zinc-100 hover:bg-zinc-200 text-zinc-700 flex items-center gap-1 transition-colors border border-zinc-200 cursor-pointer"
-                                                    title="Edit initial open record baseline"
+                                                    className="px-2 py-1 text-xs font-medium rounded-md bg-white hover:bg-zinc-100 text-zinc-700 flex items-center gap-1 transition-colors border border-zinc-200"
                                                 >
                                                     <Pencil className="w-3 h-3" />
-                                                    <span>Edit initial entry</span>
+                                                    <span>Edit entry</span>
                                                 </button>
                                             </div>
                                         </div>
@@ -464,24 +452,24 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
                                         {pos.isMultiple && (
                                             <div className="space-y-1.5">
                                                 <div className="flex items-center gap-1.5">
-                                                    <Layers className="w-3.5 h-3.5 text-blue-600" />
-                                                    <h4 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">
-                                                        Consolidated Lots ({pos.constituentTrades.length} records)
+                                                    <Layers className="w-3.5 h-3.5 text-zinc-500" />
+                                                    <h4 className="text-xs font-medium text-zinc-600">
+                                                        Lots · {pos.constituentTrades.length}
                                                     </h4>
                                                 </div>
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
                                                     {pos.constituentTrades.map((trade, idx) => (
-                                                        <div key={trade.id} className="p-2.5 bg-white border border-blue-100 rounded-lg text-xs font-mono space-y-1 shadow-2xs">
-                                                            <div className="flex items-center justify-between text-zinc-500 text-[11px]">
-                                                                <span>Lot #{idx + 1} ({dayjs(trade.openDate).format("DD MMM YYYY")})</span>
-                                                                <span className="text-[10px] text-zinc-400">{trade.openTime || "00:00"}</span>
+                                                        <div key={trade.id} className="p-2.5 bg-white border border-zinc-200 rounded-md text-xs font-mono space-y-1">
+                                                            <div className="flex items-center justify-between gap-2 text-zinc-500">
+                                                                <span className="truncate">Lot {idx + 1} · {dayjs(trade.openDate).format("DD MMM YYYY")}</span>
+                                                                <span className="text-zinc-500 shrink-0">{trade.openTime || "00:00"}</span>
                                                             </div>
                                                             <div className="flex items-baseline justify-between">
-                                                                <span className="font-bold text-zinc-800">{formatQty(trade.quantity || 0)} units</span>
+                                                                <span className="font-semibold text-zinc-800">{formatQty(trade.quantity || 0)} units</span>
                                                                 <span className="text-zinc-600">@ ${formatPrice(trade.entryPrice || 0)}</span>
                                                             </div>
-                                                            <div className="text-[10px] text-zinc-400 text-right">
-                                                                Cost: ${formatCurrency((Number(trade.quantity) || 0) * (Number(trade.entryPrice) || 0))}
+                                                            <div className="text-xs text-zinc-500 text-right">
+                                                                Cost {formatCurrency((Number(trade.quantity) || 0) * (Number(trade.entryPrice) || 0))}
                                                             </div>
                                                         </div>
                                                     ))}
@@ -493,12 +481,12 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-1.5">
                                                     <Calendar className="w-3.5 h-3.5 text-zinc-500" />
-                                                    <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                                                        Position Timeline ({pos.allEvents.length} {pos.allEvents.length === 1 ? 'event' : 'events'})
+                                                    <h4 className="text-xs font-medium text-zinc-500">
+                                                        Timeline · {pos.allEvents.length} {pos.allEvents.length === 1 ? 'event' : 'events'}
                                                     </h4>
                                                 </div>
                                                 <span className="text-xs font-medium text-zinc-500 font-mono">
-                                                    Net Holding: {formatQty(pos.totalQuantity)} units @ VWAP ${formatPrice(pos.avgEntryPrice)}
+                                                    {formatQty(pos.totalQuantity)} units · VWAP ${formatPrice(pos.avgEntryPrice)}
                                                 </span>
                                             </div>
 
@@ -510,15 +498,15 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
                                                     return (
                                                         <div 
                                                             key={event.id || index}
-                                                            className="grid grid-cols-12 gap-2 py-2 text-xs font-mono tabular-nums bg-white rounded-lg px-3 border border-zinc-200/70 items-center"
+                                                            className="grid grid-cols-12 gap-2 py-2 text-xs font-mono tabular-nums bg-white rounded-md px-3 border border-zinc-200 items-center"
                                                         >
                                                             <div className="col-span-3 text-zinc-600 font-sans">
-                                                                {new Intl.DateTimeFormat("en-GB", {
+                                                                {new Intl.DateTimeFormat("en-US", {
                                                                     day: "2-digit",
                                                                     month: "short",
                                                                     year: "numeric",
                                                                 }).format(new Date(event.date))}
-                                                                <span className="ml-1 text-[11px] text-zinc-400 font-mono">{event.time}</span>
+                                                                <span className="ml-1 text-xs text-zinc-500 font-mono">{event.time}</span>
                                                             </div>
 
                                                             <div className="col-span-3 text-zinc-700">
@@ -528,19 +516,19 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
 
                                                             <div className="col-span-3">
                                                                 {event.isInitialOpen ? (
-                                                                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200/50">
+                                                                    <span className="text-xs font-medium text-zinc-600">
                                                                         {formatQty(event.quantity)} (Open)
                                                                     </span>
                                                                 ) : isScaleIn ? (
-                                                                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200/50">
+                                                                    <span className="text-xs font-medium text-emerald-700">
                                                                         +{formatQty(event.quantity)} (Add)
                                                                     </span>
                                                                 ) : isFullClose ? (
-                                                                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200/50">
+                                                                    <span className="text-xs font-medium text-rose-700">
                                                                         -{formatQty(event.quantity)} (Close)
                                                                     </span>
                                                                 ) : (
-                                                                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200/50">
+                                                                    <span className="text-xs font-medium text-amber-700">
                                                                         -{formatQty(event.quantity)} (Reduce)
                                                                     </span>
                                                                 )}
@@ -548,17 +536,9 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
 
                                                             <div className="col-span-3 flex items-center gap-1.5 justify-end font-semibold">
                                                                 {event.result !== undefined && event.result !== 0 ? (
-                                                                    <>
-                                                                        {event.result >= 0 ? (
-                                                                            <FaArrowTrendUp className="text-emerald-600 text-xs" />
-                                                                        ) : (
-                                                                            <FaArrowTrendDown className="text-rose-600 text-xs" />
-                                                                        )}
-                                                                        <span className={event.result >= 0 ? "text-emerald-600" : "text-rose-600"}>
-                                                                            {event.result >= 0 ? "+" : ""}
-                                                                            ${formatCurrency(event.result)}
-                                                                        </span>
-                                                                    </>
+                                                                    <span className={event.result >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                                                                        {formatCurrency(event.result, true)}
+                                                                    </span>
                                                                 ) : (
                                                                     <span className="text-zinc-300 font-normal">—</span>
                                                                 )}
@@ -583,8 +563,8 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
                                                                                 setDeletingEventId(null);
                                                                             }
                                                                         }}
-                                                                        className="p-1 rounded hover:bg-red-50 text-zinc-300 hover:text-red-500 transition-colors ml-1"
-                                                                        title="Delete this event"
+                                                                        className="p-1 rounded hover:bg-red-50 text-zinc-400 hover:text-red-600 transition-colors ml-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                                                                        aria-label={`Delete ${event.eventType} event for ${pos.symbolName}`}
                                                                     >
                                                                         <Trash2 className="w-3.5 h-3.5" />
                                                                     </button>
@@ -607,12 +587,13 @@ export const OpenTradesTable = ({ trades }: OpenTradesTableProps) => {
             {tradeToDelete && (
                 <DeleteTradeDialog
                     isOpen={deleteDialogOpen}
-                    onOpenChange={setDeleteDialogOpen}
+                    onOpenChange={(open) => {
+                        setDeleteDialogOpen(open);
+                        if (!open) setTradeToDelete(null);
+                    }}
                     symbolName={tradeToDelete.symbolName}
-                    onConfirm={() => {
-                        handleDeleteOpenTrade(tradeToDelete.id);
-                        setDeleteDialogOpen(false);
-                        setTradeToDelete(null);
+                    onConfirm={async () => {
+                        return handleDeleteOpenTrade(tradeToDelete.id);
                     }}
                 />
             )}

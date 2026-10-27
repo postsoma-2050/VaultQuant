@@ -93,7 +93,7 @@ export function getCalendarEventsForDay(
             const closeDayKey = dayjs(trade.closeDate).format("DD-MM-YYYY");
             if (closeDayKey === dayKey) {
                 const numericResult = Number(trade.result);
-                if (Number.isFinite(numericResult) && numericResult !== 0) {
+                if (Number.isFinite(numericResult)) {
                     items.push({
                         id: `close-${trade.id}`,
                         tradeId: trade.id,

@@ -1,6 +1,6 @@
 "use client";
 
-import { sortTrades } from "@/features/history/sortTrades";
+import { parseCalendarDate, sortTrades } from "@/features/history/sortTrades";
 import { useAppSelector } from "@/redux/store";
 import { Trades } from "@/types";
 import { useMemo } from "react";
@@ -33,61 +33,80 @@ export default function Page() {
         });
     }, [sortBy, timeframe, tradesToSort]);
 
-    // Fully closed trades: have closeDate
+    const hasActiveFilters = Boolean(
+        timeframe !== "allHistory" ||
+        (filteredTrades && filteredTrades.length !== (trades ?? []).length)
+    );
+
+    // A close date is sufficient for legacy rows. closeTime is optional.
     const closedTrades = useMemo(() => {
-        return sortedTrades
-            .filter((trade): trade is Trades & { closeDate: string; closeTime: string; result: string } =>
-                Boolean(trade.closeDate && trade.closeDate !== "" &&
-                    trade.closeTime && trade.closeTime !== "" &&
-                    trade.result && trade.result !== ""))
-            // Ensure closed trades are sorted by closeDate (newest first)
-            .sort((a, b) => {
-                const dateDiff = new Date(b.closeDate).getTime() - new Date(a.closeDate).getTime();
-                if (dateDiff !== 0) return dateDiff;
-                // If same date, sort by time
-                const parseTime = (time: string) => {
-                    const parts = time.split(":");
-                    return Number(parts[0] || 0) * 60 + Number(parts[1] || 0);
-                };
-                const aMinutes = a.closeTime ? parseTime(a.closeTime) : 0;
-                const bMinutes = b.closeTime ? parseTime(b.closeTime) : 0;
-                return bMinutes - aMinutes;
-            });
-    }, [sortedTrades]);
+        const normalizedTrades = sortedTrades
+            .filter((trade): trade is Trades & {
+                closeDate: string;
+                closeTime: string;
+                result: string;
+            } => Boolean(trade.closeDate && trade.closeDate !== ""))
+            .map((trade) => ({
+                ...trade,
+                closeTime: trade.closeTime ?? "",
+                result: trade.result ?? "",
+            }));
+
+        if (sortBy) return normalizedTrades;
+
+        return normalizedTrades.sort((a, b) => {
+            const dateDiff =
+                (parseCalendarDate(b.closeDate)?.getTime() ?? 0) -
+                (parseCalendarDate(a.closeDate)?.getTime() ?? 0);
+            if (dateDiff !== 0) return dateDiff;
+
+            return (b.closeTime || "").localeCompare(a.closeTime || "");
+        });
+    }, [sortedTrades, sortBy]);
 
     const total = useMemo(() => {
         return closedTrades.reduce((acc, trade) => acc + (Number(trade.result) || 0), 0);
     }, [closedTrades]);
 
-    // Open trades: no closeDate OR have remaining quantity
     const openTrades = useMemo(() => {
         return sortedTrades.filter((trade) => {
-            const isNotClosed = !trade.closeDate || trade.closeDate === "";
-            return isNotClosed;
+            return !trade.closeDate || trade.closeDate === "";
         });
     }, [sortedTrades]);
 
     if (closedTrades.length === 0 && openTrades.length === 0) {
         return (
             <div className="flex items-center justify-center h-[60vh] bg-zinc-50/50 w-full">
-                <div className="border border-zinc-200/80 rounded-xl p-8 text-center bg-white shadow-xs">
-                    <p className="text-zinc-800 font-medium mb-1">No trades found</p>
-                    <p className="text-xs text-zinc-500 font-mono">Add some trades to see your history</p>
+                <div className="border border-zinc-200 rounded-lg p-8 text-center bg-white">
+                    <p className="text-zinc-800 font-medium mb-1">
+                        {hasActiveFilters ? "No matching trades" : "No trades found"}
+                    </p>
+                    <p className="text-[13px] text-zinc-500">
+                        {hasActiveFilters
+                            ? "Adjust or clear the filters to see more trades."
+                            : "Add some trades to see your history."}
+                    </p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="p-6 md:p-8 w-full max-w-none bg-zinc-50/50 min-h-full">
+        <div className="p-4 lg:p-6 w-full max-w-none bg-zinc-50/50 min-h-full">
             {activeTab === "openTrades" && (
                 openTrades.length > 0 ? (
                     <OpenTradesTable trades={openTrades} />
                 ) : (
                     <div className="flex items-center justify-center h-[60vh] w-full">
-                        <div className="border border-zinc-200/80 rounded-xl p-8 text-center bg-white shadow-xs">
-                            <p className="text-zinc-800 font-medium mb-1">No open trades</p>
-                            <p className="text-xs text-zinc-500 font-mono">All your positions are closed</p>
+                        <div className="border border-zinc-200 rounded-lg p-8 text-center bg-white">
+                            <p className="text-zinc-800 font-medium mb-1">
+                                {hasActiveFilters ? "No matching trades" : "No open trades"}
+                            </p>
+                            <p className="text-[13px] text-zinc-500">
+                                {hasActiveFilters
+                                    ? "Adjust or clear the filters to see more trades."
+                                    : "All your positions are closed."}
+                            </p>
                         </div>
                     </div>
                 )
@@ -98,9 +117,15 @@ export default function Page() {
                     <CloseTradesTable trades={closedTrades} total={total} />
                 ) : (
                     <div className="flex items-center justify-center h-[60vh] w-full">
-                        <div className="border border-zinc-200/80 rounded-xl p-8 text-center bg-white shadow-xs">
-                            <p className="text-zinc-800 font-medium mb-1">No closed trades</p>
-                            <p className="text-xs text-zinc-500 font-mono">Complete some trades to see your results</p>
+                        <div className="border border-zinc-200 rounded-lg p-8 text-center bg-white">
+                            <p className="text-zinc-800 font-medium mb-1">
+                                {hasActiveFilters ? "No matching trades" : "No closed trades"}
+                            </p>
+                            <p className="text-[13px] text-zinc-500">
+                                {hasActiveFilters
+                                    ? "Adjust or clear the filters to see more trades."
+                                    : "Complete some trades to see your results."}
+                            </p>
                         </div>
                     </div>
                 )

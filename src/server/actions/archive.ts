@@ -1,7 +1,7 @@
 "use server";
 import { db } from "@/drizzle/db";
 import { ReportsTable } from "@/drizzle/schema";
-import { ReportsEntry, ReportType } from "@/types/tradeAI.types";
+import { LiveChecklistItem, OpenPositionPayload, ReportsEntry, ReportType } from "@/types/tradeAI.types";
 import { desc, eq } from "drizzle-orm";
 import { ensureLocalUser } from "./user";
 import { v4 as uuidv4 } from "uuid";
@@ -32,11 +32,17 @@ type DeleteAddFAvoriteReportResult =
     | DeleteAddFavoriteReportSuccess
     | ReportError;
 
-export async function saveReport(report: ReportType) {
+export async function saveReport(report: ReportType, existingReportId?: string) {
     const userId = "local-user";
     await ensureLocalUser();
 
     try {
+        if (existingReportId) {
+            const existing = await db.query.ReportsTable.findFirst({ where: eq(ReportsTable.id, existingReportId) });
+            if (!existing || existing.userId !== userId) return { success: false, error: "Report not found" };
+            await db.update(ReportsTable).set({ reportData: report }).where(eq(ReportsTable.id, existingReportId));
+            return { success: true, reportId: existingReportId };
+        }
         const id = uuidv4();
         await db
             .insert(ReportsTable)
@@ -71,19 +77,48 @@ export async function getReports(): Promise<ReportsResult | null> {
             .where(eq(ReportsTable.userId, userId))
             .orderBy(desc(ReportsTable.createdAt));
 
-        if (!reports.length) return null;
+        const reportEntries: ReportsEntry[] = reports.map((report) => {
+            const data = report.reportData;
+            const checklist: LiveChecklistItem[] = data?.liveExposureChecklist || [];
+            const dangerCount = checklist.filter((item) => item.status === "danger").length;
+            const warningCount = checklist.filter((item) => item.status === "warning").length;
+            const safeCount = checklist.filter((item) => item.status === "safe").length;
 
-        const reportEntries: ReportsEntry[] = reports.map(
-            (report) => ({
+            const openPositions = data?.openPositions || [];
+            const symbols = Array.from(new Set(openPositions.map((p: OpenPositionPayload) => p.symbolName).filter(Boolean))) as string[];
+
+            const priorityFlag = checklist.find((item) => item.status === "danger")
+                ?? checklist.find((item) => item.status === "warning");
+            let keyObservation = priorityFlag?.title || priorityFlag?.message || "";
+            const mm = data?.moneyManagement || [];
+            if (!keyObservation && mm.length > 0 && mm[0]?.content && mm[0].content.length > 0) {
+                keyObservation = mm[0].content[0];
+            } else if (!keyObservation) {
+                const inst = data?.instruments || [];
+                if (inst.length > 0 && inst[0]?.content && inst[0].content.length > 0) {
+                    keyObservation = inst[0].content[0];
+                }
+            }
+
+            return {
                 reportId: report.id,
-                createdAt: new Date(report.createdAt).toLocaleDateString(),
+                // Keep the raw ISO timestamp for robust client formatting
+                createdAt: report.createdAt,
                 isFavorite: report.isFavorite,
                 numberOfMessages:
-                    report.reportData.instruments.length +
-                    report.reportData.moneyManagement.length +
-                    (report.reportData.timeManagement?.length ?? 0),
-            })
-        );
+                    [...(data?.instruments ?? []), ...(data?.moneyManagement ?? []), ...(data?.timeManagement ?? [])]
+                        .reduce((count, message) => count + message.content.length, 0),
+                openPositionsCount: data?.portfolioSummary?.totalOpenPositions ?? openPositions.length,
+                totalExposure: data?.portfolioSummary?.totalPositionValue ?? 0,
+                totalUnrealizedPnL: data?.portfolioSummary?.totalUnrealizedPnL ?? null,
+                riskAssessed: checklist.length > 0,
+                dangerCount,
+                warningCount,
+                safeCount,
+                keyObservation,
+                instruments: symbols,
+            };
+        });
 
         return {
             success: true,
@@ -108,9 +143,11 @@ export async function getReportById(
             where: eq(ReportsTable.id, reportId),
         });
 
+        if (!report) return { success: false, error: "Report not found" };
+
         return {
             success: true,
-            report: report?.reportData as ReportType,
+            report: report.reportData,
         };
     } catch (error) {
         console.error("Failed to fetch report by id:", error);

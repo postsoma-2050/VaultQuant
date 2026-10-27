@@ -5,8 +5,7 @@ import { useGSAP } from "@gsap/react";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import Image from "next/image";
 import { StatsGridPageTwo } from "@/components/StatsGridPageTwo";
-import { ReactNode, useEffect, useRef, useState } from "react";
-import { CustomButton } from "../CustomButton";
+import { ReactNode, useRef, useState } from "react";
 import { StatsGridPageOne } from "@/components/StatsGridPageOne";
 import HomePageStart from "./HomePageStart";
 import HomePageReviews from "./HomePageReviews";
@@ -17,96 +16,62 @@ import Link from "next/link";
 import HomePageAi from "./HomePageAI";
 import HomePageMobileAiPage from "./HomePageMobileAI";
 import HomePageJournal from "./HomePageJournal";
+import { VaultQuantLogo } from "@/components/icons";
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
 export default function HomePage() {
     const sectionRef = useRef<HTMLDivElement | null>(null);
     const contentRef = useRef<HTMLDivElement | null>(null);
-    const buttonRef = useRef<HTMLDivElement | null>(null);
+    const buttonRef = useRef<HTMLButtonElement | null>(null);
 
     const [isSwitchChartsActive, setIsSwitchChartsActive] = useState(false);
-
-    const [isLargeScreen, setIsLargeScreen] = useState(true);
-    useEffect(() => {
-        setIsLargeScreen(window.innerWidth >= 768);
-    }, []);
 
     useGSAP(() => {
         if (!sectionRef.current || !contentRef.current) return;
         const section = sectionRef.current;
         const content = contentRef.current;
 
-        const pinScroll = content.scrollHeight - section.offsetHeight;
+        const mm = gsap.matchMedia();
 
-        gsap.to(content, {
-            y: () => -pinScroll, // Move content up as user scrolls
-            ease: "none",
-            scrollTrigger: {
-                trigger: section,
-                start: "top top",
-                end: () => `+=${pinScroll}`,
-                pin: true,
-                scrub: true,
-                anticipatePin: 1,
-            },
-        });
+        mm.add("(min-width: 1280px) and (prefers-reduced-motion: no-preference)", () => {
+            const travel = Math.max(0, content.scrollHeight - section.offsetHeight);
 
-        const mainTimeLine = gsap.timeline({
-            scrollTrigger: {
-                start: 10,
-                scrub: false,
-                toggleActions: "play none none reverse",
-            },
-        });
-
-        const parallaxItems = content.querySelectorAll(".parallax-item");
-
-        parallaxItems.forEach((item) => {
-            const element = item as HTMLElement;
-            const speed = parseFloat(element.dataset.speed || "1") || 1;
-
-            gsap.to(item, {
-                y: () => -(pinScroll * (1 - speed)),
+            gsap.to(content, {
+                y: -travel,
                 ease: "none",
                 scrollTrigger: {
                     trigger: section,
-                    start: "top top",
-                    // end: () => `+=${pinScroll}`,
+                    start: "top bottom",
+                    end: "bottom top",
                     scrub: true,
+                    invalidateOnRefresh: true,
                 },
             });
-        });
-        const mm = gsap.matchMedia();
 
-        mm.add("(min-width: 769px)", () => {
-            mainTimeLine
-                .to(
-                    "#navbar",
-                    {
-                        width: "60%",
-                        boxShadow:
-                            "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
+            content.querySelectorAll<HTMLElement>(".parallax-item").forEach((item) => {
+                const speed = parseFloat(item.dataset.speed || "1") || 1;
+
+                gsap.to(item, {
+                    y: -(travel * (1 - speed)),
+                    ease: "none",
+                    scrollTrigger: {
+                        trigger: section,
+                        start: "top bottom",
+                        end: "bottom top",
+                        scrub: true,
+                        invalidateOnRefresh: true,
                     },
-                    0
-                )
-                .to(
-                    "#logo-text",
-                    {
-                        transform: "translateX(20%)",
-                        opacity: 0,
-                    },
-                    0
-                );
-            // .to(
-            //     "#nav-buttons",
-            //     {
-            //         transform: "translateX(-15px)",
-            //     },
-            //     0
-            // );
+                });
+            });
+
+            return () => gsap.set([content, ...content.querySelectorAll(".parallax-item")], {
+                clearProps: "transform",
+            });
         });
-    });
+
+        return () => mm.revert();
+    }, { scope: sectionRef });
 
     const handleSwitch = () => {
         if (buttonRef.current && !isSwitchChartsActive) {
@@ -120,23 +85,20 @@ export default function HomePage() {
     };
 
     return (
-        <div className={`${isLargeScreen ? "background-class" : ""}`}>
+        <div className="background-class">
             <header className="flex-center py-2 w-full sticky top-0 md:top-2 px-3 lg:px-48 z-[999]">
                 <nav
                     id="navbar"
                     className="flex items-center justify-between text-sm p-3 w-full rounded-2xl bg-white max-md:shadow-md">
-                    <div className="flex gap-3 items-center">
-                        <Image
-                            src="/main-logo.png"
-                            alt="VaultQuant Logo"
-                            width={40}
-                            height={40}
-                            className="rounded-xl object-cover"
-                        />
+                    <Link
+                        href="/landing"
+                        aria-label="VaultQuant landing page"
+                        className="flex gap-3 items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500">
+                        <VaultQuantLogo size={40} badge />
                         <p id="logo-text" className="text-[1rem] font-bold tracking-tight">
                             VaultQuant
                         </p>
-                    </div>
+                    </Link>
                     <div className="hidden md:flex justify-center md:mr-[35px]">
                         <div id="nav-buttons" className="flex gap-2 lg:gap-4">
                             <Link href="/private/calendar">
@@ -146,41 +108,35 @@ export default function HomePage() {
                                 <div className="nav-link">Statistics</div>
                             </Link>
                             <Link href="/private/tradeAI">
-                                <div className="nav-link">TradeAI</div>
+                                <div className="nav-link">Reports</div>
                             </Link>
                         </div>
                     </div>
-                    <Link href="/private/intro">
-                        <CustomButton isBlack={false}>
-                            <span className="max-md:text-[.75rem]">Get Started</span>
-                        </CustomButton>
+                    <Link
+                        href="/"
+                        className="inline-flex h-9 shrink-0 items-center justify-center rounded-md border border-zinc-200 bg-white px-3 text-sm font-medium transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500">
+                        Open workspace
                     </Link>
                 </nav>
             </header>
             <HomePageStart />
             <div
                 ref={sectionRef}
-                className="max-xl:hidden h-screen gradient relative overflow-hidden">
+                className="hidden xl:block h-screen gradient relative overflow-hidden">
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-primary flex flex-col items-center justify-center gap-4">
                     <span className="border border-zinc-700 py-1 px-2 rounded-md text-[.9rem] shadow-md shadow-zinc-900">
-                        Charts
+                        Sample chart preview
                     </span>
-                    <h1 className="text-[1rem] sm:text-[2rem] 2xl:text-[3rem] text-center font-semibold">
-                        Quantify your trade edge.
-                    </h1>
+                    <h2 className="text-[1rem] sm:text-[2rem] 2xl:text-[3rem] text-center font-semibold">
+                        Review the process behind the trade.
+                    </h2>
                     <p className="text-[1rem] text-zinc-300 max-w-xl text-center">
-                        Sanitize broker CSVs, cluster scale-ins into campaign VWAPs, and audit discipline with AI.
+                        Preview broker CSV sanitization, campaign VWAPs, and opt-in AI review with illustrative data.
                     </p>
                 </div>
-                {/* <div className="absolute bottom-[100px] left-1/2 -translate-x-1/2 flex-center gap-2">
-                    <Image src="/logo.svg" alt="logo" width={50} height={50} />
-                    <p className="font-semibold text-xl text-primary">
-                        Journal
-                    </p>
-                </div> */}
                 <div
                     ref={contentRef}
-                    className="flex flex-col items-center justify-center gap-4 absolute w-full">
+                    className="flex flex-col items-center justify-center gap-4 absolute w-full h-[1700px]">
                     {/* top | right */}
 
                     <ParallaxScrollCard position="top-[150px] right-[8%]">
@@ -188,7 +144,7 @@ export default function HomePage() {
                             src="/scroll-parallax-1.png"
                             width={340}
                             height={375}
-                            alt="scroll-parallax-image-1"
+                            alt="Sample VaultQuant chart preview"
                             className="shadow-md"
                         />
                     </ParallaxScrollCard>
@@ -199,7 +155,7 @@ export default function HomePage() {
                             src="/scroll-parallax-4.png"
                             width={340}
                             height={375}
-                            alt="scroll-parallax-image-4"
+                            alt=""
                         />
                     </BackgroundParallaxScrollCard>
                     {/* top | left */}
@@ -209,7 +165,7 @@ export default function HomePage() {
                             src="/scroll-parallax-2.png"
                             width={340}
                             height={375}
-                            alt="scroll-parallax-image-2"
+                            alt="Sample VaultQuant calendar preview"
                             className="shadow-md"
                         />
                     </ParallaxScrollCard>
@@ -220,7 +176,7 @@ export default function HomePage() {
                             src="/scroll-parallax-1.png"
                             width={340}
                             height={375}
-                            alt="scroll-parallax-image-1"
+                            alt=""
                         />
                     </BackgroundParallaxScrollCard>
                     {/* center | right */}
@@ -230,7 +186,7 @@ export default function HomePage() {
                             src="/scroll-parallax-3.png"
                             width={340}
                             height={375}
-                            alt="scroll-parallax-image-3"
+                            alt="Sample VaultQuant report preview"
                             className="shadow-md"
                         />
                     </ParallaxScrollCard>
@@ -240,7 +196,7 @@ export default function HomePage() {
                             src="/scroll-parallax-2.png"
                             width={340}
                             height={375}
-                            alt="scroll-parallax-image-2"
+                            alt=""
                         />
                     </BackgroundParallaxScrollCard>
                     {/* center | left */}
@@ -249,7 +205,7 @@ export default function HomePage() {
                             src="/scroll-parallax-4.png"
                             width={340}
                             height={375}
-                            alt="scroll-parallax-image-4"
+                            alt="Sample VaultQuant strategy preview"
                             className="shadow-md"
                         />
                     </ParallaxScrollCard>
@@ -259,7 +215,7 @@ export default function HomePage() {
                             src="/scroll-parallax-5.png"
                             width={340}
                             height={375}
-                            alt="scroll-parallax-image-5"
+                            alt=""
                         />
                     </BackgroundParallaxScrollCard>
                     {/* bottom | right */}
@@ -268,7 +224,7 @@ export default function HomePage() {
                             src="/scroll-parallax-5.png"
                             width={340}
                             height={375}
-                            alt="scroll-parallax-image-5"
+                            alt="Sample VaultQuant statistics preview"
                             className="shadow-md"
                         />
                     </ParallaxScrollCard>
@@ -278,7 +234,7 @@ export default function HomePage() {
                             src="/scroll-parallax-6.png"
                             width={340}
                             height={375}
-                            alt="scroll-parallax-image-6"
+                            alt="Sample VaultQuant journal preview"
                             className="shadow-md"
                         />
                     </ParallaxScrollCard>
@@ -291,33 +247,38 @@ export default function HomePage() {
                 <div className="py-10 md:bg-primary rounded-xl w-full flex flex-col items-center justify-center background-class">
                     <div className="flex flex-col items-center justify-center gap-4 pb-4">
                         <span className="border border-zinc-200 py-1 px-2 rounded-md text-[.7rem] md:text-[.9rem] shadow-md">
-                            Summary
+                            Sample account summary
                         </span>
-                        <h1 className="text-[2rem] md:text-[3rem] text-center font-semibold">
-                            Your trading achievements, <br /> all in one place.
-                        </h1>
-                        <p className="max-md:px-2 text-[.9rem] md:text-[1rem] mb-4">
-                            See your growth and success, and take pride in every
-                            milestone.
+                        <h2 className="text-[2rem] md:text-[3rem] text-center font-semibold">
+                            Your trading record, <br /> organized for review.
+                        </h2>
+                        <p className="max-w-2xl px-2 text-center text-[.9rem] md:text-[1rem]">
+                            Explore how account details and trade summaries are organized.
+                            Values in this preview are illustrative, not your account.
                         </p>
                         <div className="flex-center gap-4">
                             <p>Details</p>
 
-                            <div
+                            <button
+                                type="button"
                                 ref={buttonRef}
                                 onClick={handleSwitch}
+                                aria-label={isSwitchChartsActive ? "Show details view" : "Show summary view"}
+                                aria-pressed={isSwitchChartsActive}
                                 className={`${
                                     isSwitchChartsActive
                                         ? "switch-button active"
                                         : "switch-button"
-                                }`}
+                                } border-0 p-0`}
                             />
                             <p>Summary</p>
                         </div>
 
-                        {/* <CustomButton isBlack text="Join for free" /> */}
                     </div>
-                    <div className="max-md:hidden w-full">
+                    <p className="mb-3 text-center text-xs font-medium text-zinc-500">
+                        Sample data · Not your account
+                    </p>
+                    <div className="max-md:hidden w-full" aria-live="polite">
                         {isSwitchChartsActive ? (
                             <StatsGridPageTwo
                                 start={"20000"}
@@ -337,14 +298,14 @@ export default function HomePage() {
                                 src="/statistics-page-one-mobile.png"
                                 width={400}
                                 height={300}
-                                alt="chart-with-summary"
+                                alt="Sample VaultQuant summary chart"
                             />
                         ) : (
                             <Image
                                 src="/statistics-page-two-mobile.png"
                                 width={400}
                                 height={300}
-                                alt="chart-with-details"
+                                alt="Sample VaultQuant details chart"
                             />
                         )}
                     </div>

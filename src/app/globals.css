@@ -3,40 +3,36 @@
 @tailwind utilities;
 
 :root {
+    --background: #f8fafc;
+    --foreground: #09090b;
+    --border: #e4e4e7;
+    --input: #e4e4e7;
+    --ring: #18181b;
     --primary: #fbfaf9;
     --darkPrimary: #e8e7e5;
     --secondary: #f4f1ee;
     --claude: #da7756;
     --claudeBackground: rgba(218, 119, 86, 0.1);
-    --buy: #76b562;
-    --buyOpacity: rgba(118, 181, 98, 0.4);
-    --buyLight: rgba(118, 181, 98, 0.2);
-    --sell: #e96a5e;
-    --sellOpacity: rgba(233, 106, 94, 0.4);
-    --sellLight: rgba(233, 106, 94, 0.2);
-    --customBlue: #9999ff;
-    --customOrange: #e16540;
-    --customYellow: #fac666;
+    --buy: #10b981;
+    --buyOpacity: rgba(16, 185, 129, 0.35);
+    --buyLight: rgba(16, 185, 129, 0.15);
+    --sell: #f43f5e;
+    --sellOpacity: rgba(244, 63, 94, 0.35);
+    --sellLight: rgba(244, 63, 94, 0.15);
+    --customBlue: #3b82f6;
+    --customOrange: #f97316;
+    --customYellow: #eab308;
     --shadow-color: rgba(30, 45, 82, 0.06);
-    --tertiary: #6e747c;
+    --tertiary: #71717a;
+    --radius: 0.5rem;
 }
-
-/* @media (prefers-color-scheme: dark) {
-    :root {
-        --background: #0a0a0a;
-        --foreground: #ededed;
-    }
-} */
 
 body {
-    font-family: Arial, Helvetica, sans-serif;
-    color: #3d3929;
-    /* color: #444444; */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #18181b;
     font-size: 14px;
-}
-
-p {
-    font-size: 0.8rem;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 .orange-background {
@@ -293,5 +289,38 @@ mark::after {
 @layer base {
     :root {
         --radius: 0.5rem;
+    }
+}
+
+/* Workspace controls share one focus treatment and preserve usable scroll areas. */
+.vaultquant-workspace :is(button, a, input, select, [tabindex]):focus-visible {
+    outline: 2px solid #52525b;
+    outline-offset: 3px;
+}
+
+.report-icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 32px;
+    flex-shrink: 0;
+    border-radius: 4px;
+    color: #71717a;
+}
+.report-icon-button:hover { background: #f4f4f5; color: #18181b; }
+.report-icon-button:disabled { opacity: 0.5; cursor: wait; }
+.reports-page { container-type: inline-size; }
+.report-scroll-hint { display: none; }
+@container (max-width: 1039px) {
+    .report-scroll-hint { display: flex; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .vaultquant-workspace *, .vaultquant-workspace *::before, .vaultquant-workspace *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
     }
 }

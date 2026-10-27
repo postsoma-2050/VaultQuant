@@ -4,19 +4,21 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { FileText, FolderOpen, Sparkles, ShieldCheck, Database, ArrowRight, Activity, Clock, BarChart3 } from "lucide-react";
+import { FileText, FolderOpen, Sparkles, ShieldCheck, Database, ArrowRight, Activity, Clock, BarChart3, AlertTriangle } from "lucide-react";
 import { useAppSelector } from "@/redux/store";
 
 export default function AIReportControls() {
     const router = useRouter();
     const trades = useAppSelector((state) => state.tradeRecords.listOfTrades);
     const [loading, setLoading] = useState(false);
+    const tradeCount = trades?.length ?? 0;
+    const canGenerate = tradeCount >= 3;
 
     const handleNavigate = async () => {
         if (loading) return;
         setLoading(true);
 
-        if (!trades || trades.length < 3) {
+        if (!canGenerate) {
             toast.error(
                 "You need at least 3 trades to generate a report. Keep trading and try again!"
             );
@@ -28,7 +30,7 @@ export default function AIReportControls() {
     };
 
     return (
-        <div className="w-full min-h-full bg-zinc-50/50 text-zinc-900 font-sans p-4 md:p-6 space-y-4 select-none">
+        <div className="min-h-full w-full space-y-4 bg-zinc-50/50 p-4 text-zinc-900 md:p-6">
             
             {/* BENTO CARD 1: Header Banner Card (Span 12) */}
             <div className="w-full p-5 md:p-6 rounded-2xl bg-white border border-zinc-200/80 shadow-xs relative overflow-hidden">
@@ -48,14 +50,14 @@ export default function AIReportControls() {
                             </div>
                         </div>
                         <p className="text-xs text-zinc-500 max-w-xl leading-relaxed">
-                            Analyze your trading activity across money management, instruments, and timing.
+                            Review money management, instrument performance, and timing from your trade history.
                         </p>
                     </div>
 
                     {/* Clean Monospace Metric Badge */}
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-mono text-zinc-700 self-start sm:self-auto shrink-0 shadow-xs">
-                        <Activity size={14} className="text-emerald-600 animate-pulse" />
-                        <span>{trades?.length || 0} Trades Recorded</span>
+                        <div className="flex shrink-0 items-center gap-2 self-start rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-mono text-zinc-700 sm:self-auto">
+                        <Activity size={14} className="text-zinc-500" />
+                        <span>{tradeCount} trades recorded</span>
                     </div>
                 </div>
             </div>
@@ -103,12 +105,22 @@ export default function AIReportControls() {
 
                     <button
                         onClick={handleNavigate}
-                        disabled={loading}
-                        className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs shadow-xs active:scale-[0.98] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed group cursor-pointer"
+                        disabled={loading || !canGenerate}
+                        className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-zinc-900 px-5 py-3 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
                     >
-                        <FileText size={15} />
-                        <span>{loading ? "Generating report…" : "Generate Report"}</span>
-                        <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" />
+                        {canGenerate ? (
+                            <FileText size={15} />
+                        ) : (
+                            <AlertTriangle size={15} />
+                        )}
+                        <span>
+                            {loading
+                                ? "Opening report..."
+                                : canGenerate
+                                ? "Generate report"
+                                : "3 trades required"}
+                        </span>
+                        {canGenerate && <ArrowRight size={15} />}
                     </button>
                 </div>
 
@@ -132,14 +144,14 @@ export default function AIReportControls() {
                         </div>
 
                         {/* Embed Preview Items */}
-                        <div className="space-y-1.5 pt-2 border-t border-zinc-100 text-[11px]">
-                            <div className="p-2 rounded-lg bg-zinc-50 border border-zinc-200/80 flex items-center justify-between text-zinc-700 font-medium">
-                                <span className="truncate">• Money Management &amp; Risk Matrix</span>
-                                <span className="font-mono text-[10px] text-emerald-700 font-semibold">SAVED</span>
+                        <div className="space-y-1.5 pt-2 border-t border-zinc-100 text-[11px] font-mono text-zinc-600">
+                            <div className="p-2 rounded-lg bg-zinc-50 border border-zinc-200/80 flex items-center justify-between">
+                                <span>Storage Engine</span>
+                                <span className="text-zinc-500 font-semibold">SQLite reports</span>
                             </div>
-                            <div className="p-2 rounded-lg bg-zinc-50 border border-zinc-200/80 flex items-center justify-between text-zinc-700 font-medium">
-                                <span className="truncate">• Asset Performance &amp; Savings</span>
-                                <span className="font-mono text-[10px] text-blue-700 font-semibold">SAVED</span>
+                            <div className="p-2 rounded-lg bg-zinc-50 border border-zinc-200/80 flex items-center justify-between">
+                                <span>Audit Scope</span>
+                                <span className="text-zinc-500 font-semibold">VWAP &amp; Discipline</span>
                             </div>
                         </div>
                     </div>

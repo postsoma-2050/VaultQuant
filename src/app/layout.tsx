@@ -12,6 +12,12 @@ const mainFont = localFont({
 export const metadata: Metadata = {
     title: "VaultQuant | AI Trading Journal & Quantitative Terminal",
     description: "Open-Source, Local-First AI Trading Journal & Quantitative Analytics Terminal",
+    icons: {
+        icon: [
+            { url: "/icon.svg", type: "image/svg+xml" },
+        ],
+        apple: "/apple-icon",
+    },
 };
 
 export default function RootLayout({

@@ -25,6 +25,7 @@ interface CloseDetailsTabProps {
     userFieldNames: string[];
     onFieldNamesChange?: () => void;
     closeEvents?: CloseEvent[];
+    isLedgerEdit?: boolean;
 }
 
 export const CloseDetailsTab = ({
@@ -34,12 +35,13 @@ export const CloseDetailsTab = ({
     setCloseDate,
     userFieldNames,
     onFieldNamesChange,
-    closeEvents = []
+    closeEvents = [],
+    isLedgerEdit = false,
 }: CloseDetailsTabProps) => {
     const { register, control, formState: { errors }, setValue, watch } = form;
     
     // Auto-calculate result from entry/exit prices
-    const { setUserModifiedResult } = useAutoCalcResult(form);
+    const { setUserModifiedResult } = useAutoCalcResult(form, !isLedgerEdit);
     
     // Watch values for UI display and validation
     const quantityValue = watch("quantity");
@@ -209,6 +211,7 @@ export const CloseDetailsTab = ({
                         <Input
                             type="number"
                             id="quantitySold"
+                            readOnly={isLedgerEdit}
                             step="any"
                             placeholder="0"
                             className="w-full text-sm"
@@ -240,6 +243,7 @@ export const CloseDetailsTab = ({
                             <Input
                                 type="number"
                                 id="result"
+                                readOnly={isLedgerEdit}
                                 step="any"
                                 className="w-full text-sm"
                                 value={field.value || ""}
@@ -250,6 +254,7 @@ export const CloseDetailsTab = ({
                             />
                         )}
                     />
+                    {isLedgerEdit && <p className="mt-2 text-xs leading-5 text-zinc-600">Quantity and P&amp;L come from the execution history. Changes to the final exit or initial entry are recalculated when you save.</p>}
                 </div>
             </div>
 

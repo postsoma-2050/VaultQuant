@@ -69,4 +69,13 @@ export type ReportsEntry = {
     reportId: string;
     numberOfMessages: number;
     isFavorite: boolean;
+    openPositionsCount?: number;
+    totalExposure?: number;
+    totalUnrealizedPnL?: number | null;
+    riskAssessed?: boolean;
+    dangerCount?: number;
+    warningCount?: number;
+    safeCount?: number;
+    keyObservation?: string;
+    instruments?: string[];
 };

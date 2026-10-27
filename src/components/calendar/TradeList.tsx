@@ -34,7 +34,7 @@ export const TradeList = ({ trades, displayItems, title, type }: TradeListProps)
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-600">
                     {title}
                 </h4>
-                <span className="text-[11px] font-mono font-medium text-zinc-500 bg-zinc-200/70 px-2 py-0.2 rounded-full">
+                <span className="text-[11px] font-mono font-medium text-zinc-500 bg-zinc-200/70 px-2 py-0.5 rounded-full">
                     {items.length}
                 </span>
             </div>
@@ -66,22 +66,22 @@ export const TradeList = ({ trades, displayItems, title, type }: TradeListProps)
                                             {item.symbolName}
                                         </span>
                                         {item.eventType === "open" && (
-                                            <span className="shrink-0 text-[9px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 font-semibold uppercase">
+                                            <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-semibold uppercase">
                                                 Open
                                             </span>
                                         )}
                                         {item.eventType === "add" && (
-                                            <span className="shrink-0 text-[9px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-semibold uppercase">
+                                            <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold uppercase">
                                                 Add
                                             </span>
                                         )}
                                         {isReduce && (
-                                            <span className="shrink-0 text-[9px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold uppercase">
+                                            <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold uppercase">
                                                 Reduce
                                             </span>
                                         )}
                                         {isClose && (
-                                            <span className="shrink-0 text-[9px] px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 font-semibold uppercase">
+                                            <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 font-semibold uppercase">
                                                 Close
                                             </span>
                                         )}
@@ -110,7 +110,7 @@ export const TradeList = ({ trades, displayItems, title, type }: TradeListProps)
                                     </span>
                                     {item.result !== undefined ? (
                                         <p className={`font-bold text-xs ${item.result >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                                            {item.result >= 0 ? "+" : ""}${Number(item.result).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            {item.result >= 0 ? "+" : "-"}${Math.abs(Number(item.result)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </p>
                                     ) : (
                                         <p className="font-medium text-zinc-700 text-xs">

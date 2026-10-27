@@ -32,6 +32,7 @@ export default function GeneratedReport({
     portfolioSummary,
 }: GeneratedReportType) {
     const [followUpQuestionInput, setFollowUpQuestionInput] = useState("");
+    const [followUpError, setFollowUpError] = useState<string | null>(null);
 
     const reduxTrades = useAppSelector((state) => state.tradeRecords.listOfTrades);
     const trades = enrichedTrades || reduxTrades;
@@ -115,12 +116,6 @@ export default function GeneratedReport({
         })
     );
 
-    const prevResponse: Record<Category, string> = {
-        moneyManagement: JSON.stringify(report?.moneyManagement),
-        instruments: JSON.stringify(report?.instruments),
-        timeManagement: JSON.stringify(report?.timeManagement),
-    };
-
     const handleFollowUpQuestionSubmit = async (
         e: React.FormEvent<HTMLFormElement> | React.KeyboardEvent<HTMLTextAreaElement>
     ) => {
@@ -130,27 +125,28 @@ export default function GeneratedReport({
             return;
         }
 
-        const tempQuestionStorage = followUpQuestionInput;
+        const tempQuestionStorage = followUpQuestionInput.trim();
+        const categoryBeforeRequest = selectCategory;
+        const previousCategoryReport = report?.[categoryBeforeRequest];
+        if (!previousCategoryReport) return;
+
         setFollowUpQuestionInput("");
+        setFollowUpError(null);
 
         try {
             setLoading((prevLoading) => ({
                 ...prevLoading,
-                [selectCategory]: true,
+                [categoryBeforeRequest]: true,
             }));
 
             setReport((prevReport) => {
-                if (
-                    prevReport === null ||
-                    prevReport[selectCategory] === null
-                ) {
-                    return null;
-                }
+                const currentCategory = prevReport?.[categoryBeforeRequest];
+                if (!prevReport || !currentCategory) return prevReport;
 
                 return {
                     ...prevReport,
-                    [selectCategory]: [
-                        ...prevReport[selectCategory],
+                    [categoryBeforeRequest]: [
+                        ...currentCategory,
                         { type: "user", content: [tempQuestionStorage] },
                     ],
                 };
@@ -167,63 +163,80 @@ export default function GeneratedReport({
                     closedTrades: filteredDataForAICall,
                     trades: filteredDataForAICall,
                     followUpQuestion: tempQuestionStorage,
-                    prevResponse: prevResponse[selectCategory],
+                    prevResponse: JSON.stringify(previousCategoryReport),
                 }),
             });
 
             if (!res.ok) {
-                const errorMessage = await res.json();
-                throw new Error(errorMessage.error);
+                const errorMessage = await res.json().catch(() => null);
+                throw new Error(
+                    errorMessage?.error ||
+                        "The AI follow-up request failed. Try again."
+                );
             }
 
             const data = await res.json();
 
             const claudeReport = JSON.parse(data.content[0].text);
+            if (!Array.isArray(claudeReport.answer)) {
+                throw new Error("The AI returned an unexpected response format.");
+            }
 
             setReport((prevReport) => {
-                if (
-                    prevReport === null ||
-                    prevReport[selectCategory] === null
-                ) {
-                    return null;
-                }
+                const currentCategory = prevReport?.[categoryBeforeRequest];
+                if (!prevReport || !currentCategory) return prevReport;
 
                 return {
                     ...prevReport,
-                    [selectCategory]: [
-                        ...prevReport[selectCategory],
+                    [categoryBeforeRequest]: [
+                        ...currentCategory,
                         { type: "system", content: claudeReport.answer },
                     ],
                 };
             });
         } catch (error) {
             console.error(error);
-            toast.error("Error occurred while getting answer! Try again later!");
+            const message =
+                error instanceof Error
+                    ? error.message
+                    : "The AI follow-up request failed. Try again.";
+            setFollowUpError(message);
+            toast.error(message);
         } finally {
             setLoading((prevLoading) => ({
                 ...prevLoading,
-                [selectCategory]: false,
+                [categoryBeforeRequest]: false,
             }));
         }
     };
 
     return (
-        <div className="flex flex-col flex-1 justify-between h-full min-h-0 overflow-hidden">
-            <div className="flex-1 overflow-y-auto px-4 md:px-8">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div className="min-w-0 flex-1 px-4 pb-6 pt-1 md:px-8">
                 {report && report[selectCategory] ? (
                     <ReportCard items={report[selectCategory]} loading={loading[selectCategory]} />
                 ) : (
-                    <div className="flex justify-center items-center h-full text-[#3D3929]">
-                        Select a category to view the report.
+                    <div className="flex min-h-48 items-center justify-center rounded-lg border border-dashed border-zinc-200 text-sm text-zinc-500">
+                        {report
+                            ? "This section is not available in the saved report."
+                            : "Select a category to view the report."}
                     </div>
                 )}
             </div>
 
-            {/* Sticky Follow-up Question Bar */}
-            <div className="px-4 md:px-8 py-3 bg-white/95 backdrop-blur-xs border-t border-neutral-200/80 shrink-0">
+            {report && (
+            <div className="shrink-0 border-t border-zinc-200 bg-white/95 px-4 py-3 md:px-8">
+                {followUpError && (
+                    <p
+                        role="alert"
+                        className="mx-auto mb-2 max-w-4xl text-xs text-rose-700"
+                    >
+                        {followUpError}
+                    </p>
+                )}
                 <form
                     onSubmit={handleFollowUpQuestionSubmit}
-                    className="relative flex items-center max-w-4xl mx-auto">
+                    className="relative mx-auto flex max-w-4xl items-center">
                     <AutoResizeTextarea
                         value={followUpQuestionInput}
                         onChange={(e) => setFollowUpQuestionInput(e.target.value)}
@@ -235,8 +248,8 @@ export default function GeneratedReport({
                                 }
                             }
                         }}
-                        placeholder="Ask a follow-up question about this report..."
-                        className="w-full text-sm py-2.5 pl-4 pr-12 rounded-xl bg-neutral-100/80 border border-neutral-200 focus:outline-hidden focus:ring-2 focus:ring-neutral-900 focus:bg-white transition-all resize-none max-h-32 text-neutral-800 placeholder:text-neutral-400"
+                        placeholder="Ask a follow-up question..."
+                        className="max-h-32 w-full resize-none rounded-lg border border-zinc-200 bg-zinc-50 py-2.5 pl-3 pr-12 text-sm text-zinc-800 transition-colors placeholder:text-zinc-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-400"
                     />
 
                     <button
@@ -245,7 +258,7 @@ export default function GeneratedReport({
                             loading[selectCategory] ||
                             followUpQuestionInput.trim() === ""
                         }
-                        className="absolute right-2 p-2 bg-neutral-900 text-white rounded-lg hover:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                        className="absolute right-2 rounded-md bg-zinc-900 p-2 text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40">
                         {loading[selectCategory] ? (
                             <Loader2 size={16} className="animate-spin" />
                         ) : (
@@ -254,6 +267,7 @@ export default function GeneratedReport({
                     </button>
                 </form>
             </div>
+            )}
         </div>
     );
 }

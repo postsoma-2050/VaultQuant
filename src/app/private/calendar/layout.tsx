@@ -122,7 +122,7 @@ export default function CalendarLayout({ children }: { children: ReactNode }) {
 
     if (!isDataLoaded) {
         return (
-            <div className="flex-center h-screen">
+            <div className="flex h-full min-h-[360px] items-center justify-center">
                 <div className="running-algorithm">
                     <span className="dot"></span>
                     <span className="dot"></span>
@@ -133,13 +133,12 @@ export default function CalendarLayout({ children }: { children: ReactNode }) {
     }
 
     return (
-        <div className="flex flex-col h-full">
+        <div className="flex h-full min-h-0 flex-col">
             <div
-                className={`px-3 md:px-6 flex items-center justify-between py-4 md:py-2 border-b border-zinc-200 ${calendarView === "Month" ? "max-md:flex-col" : ""
-                    }  gap-4`}>
-                <div className="flex items-center justify-between max-md:w-full gap-4 md:gap-5">
+                className={`flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-3 py-3 md:px-6 ${calendarView === "Month" ? "max-md:flex-col" : ""}`}>
+                <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 md:gap-5">
                     <div
-                        className={`flex gap-3 ${calendarView === "Year" ? "max-md:hidden" : ""
+                        className={`flex min-w-0 flex-wrap items-center gap-2.5 ${calendarView === "Year" ? "max-md:hidden" : ""
                             }`}>
                         <Sheet
                             open={!!isDialogOpen["any"]}
@@ -170,7 +169,8 @@ export default function CalendarLayout({ children }: { children: ReactNode }) {
                                 calendarView === "Month"
                                     ? handlePrevMonth
                                     : handlePrevYear
-                            }>
+                            }
+                            aria-label={calendarView === "Month" ? "Previous month" : "Previous year"}>
                             <MdOutlineKeyboardArrowLeft className="text-[1.3rem]" />
                         </CustomButton>
                         <CustomButton
@@ -179,7 +179,8 @@ export default function CalendarLayout({ children }: { children: ReactNode }) {
                                 calendarView === "Month"
                                     ? handleNextMonth
                                     : handleNextYear
-                            }>
+                            }
+                            aria-label={calendarView === "Month" ? "Next month" : "Next year"}>
                             <MdOutlineKeyboardArrowRight className="text-[1.3rem]" />
                         </CustomButton>
                     </div>
@@ -192,18 +193,18 @@ export default function CalendarLayout({ children }: { children: ReactNode }) {
                         )}
                     </div>
                 </div>
-                <div className="flex max-md:justify-between max-md:w-full md:gap-5 items-center">
-                    <div className="md:ml-2 md:px-3 py-1 border border-zinc-200 rounded-full bg-zinc-100 text-xs font-medium text-zinc-600">
+                <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 md:gap-5">
+                    <div className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-600">
                         {calendarView === "Month" ? (
                             <p>
-                                Period Realized P&L:{" "}
+                                Realized P&amp;L:{" "}
                                 {monthViewTotal !== undefined
                                     ? `${monthViewTotal >= 0 ? "+" : ""}${Number(monthViewTotal).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                                     : "0.00"}
                             </p>
                         ) : (
                             <p>
-                                Period Realized P&L:{" "}
+                                Realized P&amp;L:{" "}
                                 {yearViewTotal !== undefined
                                     ? `${yearViewTotal >= 0 ? "+" : ""}${Number(yearViewTotal).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                                     : "0.00"}
@@ -235,7 +236,7 @@ export default function CalendarLayout({ children }: { children: ReactNode }) {
                     </Select>
                 </div>
             </div>
-            <section className="flex-1 max-md:overflow-auto">
+            <section className="min-h-0 flex-1 overflow-auto">
                 {children}
             </section>
         </div>

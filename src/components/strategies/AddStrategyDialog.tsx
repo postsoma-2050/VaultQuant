@@ -280,31 +280,38 @@ export default function AddStrategyDialog({
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
                 {strategyNameEditing ? (
-                    <div className="p-2 rounded-md hover:bg-neutral-100 transition-colors cursor-pointer">
-                        <Pencil size={16} className="text-neutral-600" />
-                    </div>
+                    <button
+                        type="button"
+                        aria-label={`Edit ${strategyNameEditing}`}
+                        className="p-2 rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+                    >
+                        <Pencil size={16} aria-hidden="true" />
+                    </button>
                 ) : (
-                    <button className="flex gap-2 items-center text-sm font-medium border border-zinc-200 hover:bg-zinc-50 hover:border-zinc-300 transition-all px-4 py-2 rounded-lg shadow-sm bg-white">
+                    <button
+                        type="button"
+                        className="flex gap-2 items-center text-sm font-medium border border-zinc-200 hover:bg-zinc-50 hover:border-zinc-300 transition-colors px-3 py-2 rounded-md bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+                    >
                         <Plus size={16} />
                         New Strategy
                     </button>
                 )}
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden gap-0">
-                <div className="p-6 pb-4 border-b border-neutral-100">
+            <DialogContent className="sm:max-w-[640px] p-0 gap-0 overflow-hidden">
+                <div className="p-5 pb-4 border-b border-zinc-200">
                     <DialogHeader>
-                        <DialogTitle className="text-xl font-semibold text-neutral-900">
+                        <DialogTitle className="text-lg font-semibold text-zinc-900">
                             {strategyNameEditing ? "Edit Strategy" : "Create New Strategy"}
                         </DialogTitle>
-                        <DialogDescription className="text-neutral-500 mt-1.5">
-                            Define your trading rules to maintain discipline and consistency.
+                        <DialogDescription className="text-zinc-500 mt-1.5">
+                            Define entry and exit conditions for this strategy.
                         </DialogDescription>
                     </DialogHeader>
                 </div>
 
-                <div className="p-6 space-y-6">
+                <div className="min-h-0 overflow-y-auto p-5 space-y-5">
                     <div className="space-y-2">
-                        <Label htmlFor="strategyName" className="text-sm font-medium text-neutral-700">
+                        <Label htmlFor="strategyName" className="text-sm font-medium text-zinc-700">
                             Strategy Name
                         </Label>
                         <Input
@@ -318,7 +325,7 @@ export default function AddStrategyDialog({
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="description" className="text-sm font-medium text-neutral-700">
+                        <Label htmlFor="description" className="text-sm font-medium text-zinc-700">
                             Description <span className="text-neutral-400 font-normal">(Optional)</span>
                         </Label>
                         <textarea
@@ -326,21 +333,21 @@ export default function AddStrategyDialog({
                             placeholder="Describe your strategy's goals, timeframe, or key indicators..."
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
-                            className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                            className="flex min-h-[72px] w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 resize-none"
                         />
                     </div>
 
                     <Tabs defaultValue="open" className="w-full">
-                        <TabsList className="grid w-full grid-cols-2 h-10 bg-neutral-100 p-1 rounded-lg mb-6">
+                        <TabsList className="grid w-full grid-cols-2 h-9 bg-zinc-100 p-0.5 rounded-md mb-4">
                             <TabsTrigger 
                                 value="open"
-                                className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md transition-all"
+                                className="data-[state=active]:bg-white data-[state=active]:shadow-xs rounded-md transition-colors"
                             >
                                 Open Rules
                             </TabsTrigger>
                             <TabsTrigger 
                                 value="close"
-                                className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md transition-all"
+                                className="data-[state=active]:bg-white data-[state=active]:shadow-xs rounded-md transition-colors"
                             >
                                 Close Rules
                             </TabsTrigger>
@@ -348,32 +355,33 @@ export default function AddStrategyDialog({
 
                         <TabsContent value="open" className="mt-0 space-y-4 outline-none">
                             <div className="flex items-center justify-between">
-                                <h3 className="text-sm font-medium text-neutral-900">
-                                    Entry Conditions
+                                <h3 className="text-sm font-medium text-zinc-900">
+                                    Entry conditions
                                 </h3>
                                 <button
                                     onClick={() => handleCreateNewRule({ type: "open" })}
-                                    className="flex items-center gap-1.5 text-sm font-medium text-emerald-600 hover:text-emerald-700 transition-colors px-3 py-1.5 rounded-md hover:bg-emerald-50"
+                                    type="button"
+                                    className="flex items-center gap-1.5 text-sm font-medium text-zinc-700 hover:text-zinc-900 transition-colors px-2.5 py-1.5 rounded-md border border-zinc-200 hover:bg-zinc-50"
                                 >
                                     <Plus size={14} />
                                     Add Rule
                                 </button>
                             </div>
                             
-                            <div className="border rounded-lg overflow-hidden">
+                            <div className="border border-zinc-200 rounded-md overflow-hidden">
                                 <Table>
-                                    <TableHeader className="bg-neutral-50">
-                                        <TableRow className="hover:bg-neutral-50 border-b-neutral-100">
-                                            <TableHead className="w-[55%] font-medium text-neutral-600 h-10">Rule Description</TableHead>
-                                            <TableHead className="w-[30%] font-medium text-neutral-600 h-10">Priority</TableHead>
+                                    <TableHeader className="bg-zinc-50">
+                                        <TableRow className="hover:bg-zinc-50 border-b-zinc-200">
+                                            <TableHead className="w-[55%] font-medium text-zinc-600 h-10">Rule</TableHead>
+                                            <TableHead className="w-[30%] font-medium text-zinc-600 h-10">Priority</TableHead>
                                             <TableHead className="w-[15%] h-10"></TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {openPositionRules.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={3} className="h-24 text-center text-neutral-500 text-sm">
-                                                    No rules added yet. Click &quot;Add Rule&quot; to start.
+                                                <TableCell colSpan={3} className="h-24 text-center text-zinc-500 text-sm">
+                                                    No entry rules yet.
                                                 </TableCell>
                                             </TableRow>
                                         ) : (
@@ -410,32 +418,33 @@ export default function AddStrategyDialog({
 
                         <TabsContent value="close" className="mt-0 space-y-4 outline-none">
                             <div className="flex items-center justify-between">
-                                <h3 className="text-sm font-medium text-neutral-900">
-                                    Exit Conditions
+                                <h3 className="text-sm font-medium text-zinc-900">
+                                    Exit conditions
                                 </h3>
                                 <button
                                     onClick={() => handleCreateNewRule({ type: "close" })}
-                                    className="flex items-center gap-1.5 text-sm font-medium text-emerald-600 hover:text-emerald-700 transition-colors px-3 py-1.5 rounded-md hover:bg-emerald-50"
+                                    type="button"
+                                    className="flex items-center gap-1.5 text-sm font-medium text-zinc-700 hover:text-zinc-900 transition-colors px-2.5 py-1.5 rounded-md border border-zinc-200 hover:bg-zinc-50"
                                 >
                                     <Plus size={14} />
                                     Add Rule
                                 </button>
                             </div>
 
-                            <div className="border rounded-lg overflow-hidden">
+                            <div className="border border-zinc-200 rounded-md overflow-hidden">
                                 <Table>
-                                    <TableHeader className="bg-neutral-50">
-                                        <TableRow className="hover:bg-neutral-50 border-b-neutral-100">
-                                            <TableHead className="w-[55%] font-medium text-neutral-600 h-10">Rule Description</TableHead>
-                                            <TableHead className="w-[30%] font-medium text-neutral-600 h-10">Priority</TableHead>
+                                    <TableHeader className="bg-zinc-50">
+                                        <TableRow className="hover:bg-zinc-50 border-b-zinc-200">
+                                            <TableHead className="w-[55%] font-medium text-zinc-600 h-10">Rule</TableHead>
+                                            <TableHead className="w-[30%] font-medium text-zinc-600 h-10">Priority</TableHead>
                                             <TableHead className="w-[15%] h-10"></TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {closePositionRules.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={3} className="h-24 text-center text-neutral-500 text-sm">
-                                                    No rules added yet. Click &quot;Add Rule&quot; to start.
+                                                <TableCell colSpan={3} className="h-24 text-center text-zinc-500 text-sm">
+                                                    No exit rules yet.
                                                 </TableCell>
                                             </TableRow>
                                         ) : (
@@ -472,7 +481,7 @@ export default function AddStrategyDialog({
                     </Tabs>
                 </div>
 
-                <div className="p-6 pt-4 border-t border-neutral-100 bg-neutral-50/50 flex justify-end gap-3">
+                <div className="p-5 py-3 border-t border-zinc-200 bg-zinc-50 flex justify-end gap-2">
                     <DialogClose asChild>
                         <CustomButton isBlack={false} className="h-10 px-6">
                             Cancel

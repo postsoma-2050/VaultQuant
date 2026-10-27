@@ -1,5 +1,3 @@
-import Image from "next/image";
-import { CustomButton } from "../CustomButton";
 import {
     Accordion,
     AccordionContent,
@@ -8,6 +6,16 @@ import {
 } from "@/components/ui/accordion";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { VaultQuantLogo } from "@/components/icons";
+
+const productLinks = [
+    { label: "Calendar", href: "/private/calendar" },
+    { label: "History", href: "/private/history" },
+    { label: "Strategies", href: "/private/strategies" },
+    { label: "Statistics", href: "/private/statistics" },
+    { label: "Daily Journal", href: "/private/journal" },
+    { label: "Reports", href: "/private/tradeAI" },
+];
 
 const HomePageFooter = () => {
     return (
@@ -23,24 +31,23 @@ const HomePageFooter = () => {
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                             </span>
-                            Start Quantifying Your Edge
+                            Start with your own records
                         </div>
 
                         <h2 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight max-w-4xl">
-                            Join quantitative & <span className="text-zinc-400">smart traders.</span>
+                            Review the process behind <span className="text-zinc-400">every trade.</span>
                         </h2>
                         
                         <p className="text-zinc-400 text-lg md:text-xl max-w-2xl leading-relaxed">
-                            Automated broker CSV sanitization, dynamic VWAP campaign clustering, and AI-powered discipline audits.
+                            Broker CSV previews, campaign VWAP clustering, and opt-in AI review.
+                            Your records stay in the local workspace unless you run an AI report.
                         </p>
 
                         <div className="pt-4">
-                            <Link href="/private/intro">
-                                <CustomButton isBlack={false}>
-                                    <span className="flex items-center gap-2 text-lg px-2">
-                                        Get started <ArrowRight className="w-4 h-4" />
-                                    </span>
-                                </CustomButton>
+                            <Link
+                                href="/"
+                                className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-zinc-200 bg-white px-4 text-lg font-medium text-zinc-900 transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300">
+                                Open workspace <ArrowRight className="w-4 h-4" />
                             </Link>
                         </div>
                     </div>
@@ -50,22 +57,28 @@ const HomePageFooter = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-24 pt-8">
                     {/* Brand Column */}
                     <div className="lg:col-span-5 space-y-8">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-zinc-100 rounded-xl">
-                                <Image
-                                    src="/main-logo.png"
-                                    alt="VaultQuant Logo"
-                                    width={32}
-                                    height={32}
-                                    className="w-8 h-8 rounded-lg object-cover"
-                                />
-                            </div>
+                        <Link
+                            href="/landing"
+                            className="flex w-fit items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500">
+                            <VaultQuantLogo size={32} badge />
                             <span className="font-bold text-xl tracking-tight">VaultQuant</span>
-                        </div>
+                        </Link>
                         
                         <p className="text-zinc-500 leading-relaxed text-lg">
-                            Your quantitative trading companion. Sanitize broker CSV transactions, aggregate campaign VWAPs, and audit strategy discipline with AI.
+                            A local-first trading journal for reviewing broker imports,
+                            campaign VWAPs, strategy discipline, and opt-in AI analysis.
                         </p>
+
+                        <nav aria-label="Product" className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm text-zinc-600">
+                            {productLinks.map((link) => (
+                                <Link
+                                    key={link.href}
+                                    href={link.href}
+                                    className="w-fit underline-offset-4 hover:text-zinc-900 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500">
+                                    {link.label}
+                                </Link>
+                            ))}
+                        </nav>
 
                         <div className="text-sm text-zinc-400 pt-2">
                             <p>© {new Date().getFullYear()} VaultQuant. All rights reserved.</p>
@@ -81,7 +94,10 @@ const HomePageFooter = () => {
                                     What is VaultQuant?
                                 </AccordionTrigger>
                                 <AccordionContent className="text-zinc-500 text-base leading-relaxed pb-6">
-                                    VaultQuant is a Next-Gen Quantitative Trading Journal & Campaign Intelligence Engine. It automatically sanitizes broker CSV transactions, clusters scale-in orders into clean trade campaigns, calculates exact VWAPs, and provides AI-powered strategy audits.
+                                    VaultQuant is a local-first trading journal. It previews and
+                                    sanitizes broker CSV transactions, clusters scale-in orders into
+                                    trade campaigns, calculates campaign VWAPs, and can generate
+                                    AI-assisted reviews from trading context.
                                 </AccordionContent>
                             </AccordionItem>
 
@@ -90,13 +106,9 @@ const HomePageFooter = () => {
                                     What broker CSV formats are supported?
                                 </AccordionTrigger>
                                 <AccordionContent className="text-zinc-500 text-base leading-relaxed pb-6">
-                                    VaultQuant supports standard CSV exports from major brokers including:
-                                    <ul className="mt-4 grid grid-cols-2 gap-2">
-                                        <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-zinc-400"/> Futu / Moomoo (富途)</li>
-                                        <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-zinc-400"/> Interactive Brokers (IBKR)</li>
-                                        <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-zinc-400"/> Webull (微牛)</li>
-                                        <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-zinc-400"/> Charles Schwab & Robinhood</li>
-                                    </ul>
+                                    The importer accepts CSV rows that expose a symbol, side or action,
+                                    quantity, price, and timestamp. Because broker exports vary, use the
+                                    preview to verify the sanitized campaigns before committing an import.
                                 </AccordionContent>
                             </AccordionItem>
 
@@ -105,7 +117,23 @@ const HomePageFooter = () => {
                                     How does Campaign VWAP Clustering work?
                                 </AccordionTrigger>
                                 <AccordionContent className="text-zinc-500 text-base leading-relaxed pb-6">
-                                    Instead of logging dozens of individual fill rows, VaultQuant&apos;s Campaign Engine groups multiple scale-in buys into a unified average position price (VWAP) and matches scale-out sells into clean trade cards with exact net PnL calculations.
+                                    Instead of treating every fill as a separate journal entry,
+                                    VaultQuant groups scale-in transactions into a campaign and
+                                    calculates the campaign VWAP from the imported fills. Sell events
+                                    are matched to the campaign so realized results can be reviewed.
+                                </AccordionContent>
+                            </AccordionItem>
+
+                            <AccordionItem value="item-4" className="border border-zinc-200 rounded-xl px-6 data-[state=open]:bg-zinc-50 transition-colors border-b-0">
+                                <AccordionTrigger className="hover:no-underline py-6 text-lg font-medium">
+                                    What happens to my data when I use AI?
+                                </AccordionTrigger>
+                                <AccordionContent className="text-zinc-500 text-base leading-relaxed pb-6">
+                                    Your local SQLite records remain the source of truth. When you
+                                    generate or follow up on an AI report, the trading context
+                                    is sent to the AI endpoint configured in your environment. If that
+                                    endpoint is remote, the provider receives that context. Normal
+                                    journaling and local analytics do not make an AI request.
                                 </AccordionContent>
                             </AccordionItem>
                         </Accordion>

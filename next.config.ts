@@ -2,12 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
     output: "standalone",
-    eslint: {
-        ignoreDuringBuilds: true,
-    },
-    typescript: {
-        ignoreBuildErrors: true,
-    },
+    // Keep verification builds separate from the running desktop dev server.
+    distDir: process.env.VAULTQUANT_BUILD_DIR || ".next",
     env: {
         NEXT_PUBLIC_AI_MODEL: process.env.AI_MODEL || process.env.NEXT_PUBLIC_AI_MODEL || "",
     },

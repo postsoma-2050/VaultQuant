@@ -6,7 +6,7 @@
 [![Database: SQLite](https://img.shields.io/badge/Database-SQLite%20Local--First-blueviolet?style=for-the-badge&logo=sqlite)](https://www.sqlite.org/)
 [![Status: Active Dev](https://img.shields.io/badge/Status-Active%20Development%20(80%25)-orange?style=for-the-badge)](https://github.com/postsoma-2050/VaultQuant/issues)
 
-**VaultQuant** is an open-source, local-first trading journal and quantitative campaign intelligence platform built for active traders and quant developers. It eliminates noisy execution fills by automatically clustering scale-in orders into clean **VWAP Trade Campaigns**, auditing trading discipline with **Multi-Model AI**, and ensuring 100% financial privacy via an embedded local SQLite database.
+**VaultQuant** is an open-source desktop trading journal for active traders and quant developers. It groups execution fills into **VWAP trade campaigns**, records trading rules and reflections, and stores records in a local SQLite database. Optional AI analysis sends trading context to the provider configured in your environment; market quotes also require an external data request.
 
 ---
 
@@ -22,7 +22,7 @@
 | Performance Statistics & Reports | ✅ Stable |
 | Strategies Tracker | ✅ Stable |
 | Advanced Analytics & Benchmarks | 🔧 In Progress |
-| Mobile Responsive UI | 🔧 In Progress |
+| Desktop window resizing | Supported; mobile apps are outside the current scope |
 | Multi-user / Auth Layer | 📋 Planned |
 
 **💡 Recommended Usage**: For the best experience, pair VaultQuant with an **AI coding agent** (e.g., Claude, Gemini, Cursor, Antigravity IDE) to automate setup, auto-generate `.env` configurations, and extend the platform with custom features tailored to your trading workflow.
@@ -59,10 +59,11 @@ git clone https://github.com/postsoma-2050/VaultQuant.git && cd VaultQuant && ./
 - **365-Day Calendar Heatmap**: Visualize daily, monthly, and yearly PnL performance at a glance.
 - **Benchmark Comparison**: Track portfolio equity curve vs. S&P 500 benchmark.
 
-### 5. 🔒 100% Local-First & Complete Financial Sovereignty
-- All trade records and journals stay strictly on your local machine in an embedded SQLite database (`file:local.db`).
-- Zero data selling, zero third-party SaaS tracking.
-- Complete export and restore via lossless JSON and RFC 4180 CSV formats.
+### 5. Local storage and configurable external services
+- Trade records, strategies, journals, and saved reports are stored in an embedded SQLite database (`file:local.db`).
+- AI report generation and follow-up questions send trading context to your configured model provider, which can be local or remote. Review that provider's data policy before using it.
+- Live-price lookup requests send the relevant instrument symbols to a market-data service.
+- JSON backup and CSV export are available in Import & Backup. Check the import preview before committing records.
 
 ---
 

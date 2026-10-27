@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
     Select,
     SelectContent,
@@ -23,6 +23,8 @@ import { Trades } from "@/types";
 
 interface ReportPageProps {
     goBackButton: string;
+    backHref?: string;
+    reportId?: string;
     tokens?: number | undefined;
     report: ReportType | null;
     setReport: React.Dispatch<React.SetStateAction<ReportType | null>>;
@@ -34,6 +36,8 @@ interface ReportPageProps {
 
 export default function ReportPage({
     goBackButton,
+    backHref = "/private/reports-history",
+    reportId,
     report,
     setReport,
     setTokens,
@@ -43,14 +47,31 @@ export default function ReportPage({
 }: ReportPageProps) {
     const [selectCategory, setSelectCategory] =
         useState<Category>("moneyManagement");
+    const [isSaving, setIsSaving] = useState(false);
+    const [savedId, setSavedId] = useState(reportId);
+    const [savedSnapshot, setSavedSnapshot] = useState<string | null>(reportId && report ? JSON.stringify(report) : null);
+    const saving = useRef(false);
+    const hasSaved = savedSnapshot !== null && savedSnapshot === JSON.stringify(report);
 
     const handleSaveReport = async () => {
-        if (report) {
-            const response = await saveReport(report);
-            toast.success("The report has been saved successfully!");
-            console.log(response);
-        } else {
-            toast.error("Try again later!");
+        if (!report || saving.current || hasSaved) return;
+        saving.current = true;
+        setIsSaving(true);
+        try {
+            const snapshot = JSON.stringify(report);
+            const response = await saveReport(report, savedId);
+            if (response && response.success) {
+                setSavedId(response.reportId);
+                setSavedSnapshot(snapshot);
+                toast.success("The report has been saved successfully!");
+            } else {
+                toast.error("Failed to save report. Please try again.");
+            }
+        } catch {
+            toast.error("An error occurred while saving the report.");
+        } finally {
+            saving.current = false;
+            setIsSaving(false);
         }
     };
 
@@ -61,29 +82,24 @@ export default function ReportPage({
 
     if (report) {
         return (
-            <div className="flex flex-col justify-between h-full pb-2">
-                <div className="relative flex max-md:flex-col md:items-center justify-between px-4 py-4 md:px-8">
+            <div className="flex h-full min-h-0 min-w-0 flex-col">
+                <div className="relative flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3 md:px-8">
                     <Link
-                        href={`/private/${
-                            goBackButton === "Archive"
-                                ? "reports-history"
-                                : "tradeAI"
-                        }`}
-                        className="relative group hidden md:inline-block cursor-pointer">
-                        <div className="flex items-center gap-2 mb-2 text-[#3D3929]">
+                        href={backHref}
+                        className="relative group inline-block cursor-pointer">
+                        <div className="flex items-center gap-2 text-sm text-zinc-600 hover:text-zinc-900">
                             <ArrowUpLeft size={16} />
                             {goBackButton}
                         </div>
-                        <span className="absolute left-0 bottom-0 block h-[0.3px] w-0 bg-emerald-400 transition-all duration-300 group-hover:w-full"></span>
                     </Link>
 
-                    <div className="flex gap-2 md:gap-6">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
                         <Select
                             value={selectCategory}
                             onValueChange={(value: Category) =>
                                 setSelectCategory(value)
                             }>
-                            <SelectTrigger className="w-[200px] hover:bg-[#f1efe8] rounded-lg duration-300 text-zinc-700 font-medium">
+                            <SelectTrigger className="h-9 w-[180px] rounded-md border-zinc-200 font-medium text-zinc-700 hover:bg-zinc-50">
                                 <SelectValue placeholder="Choose category" />
                             </SelectTrigger>
                             <SelectContent>
@@ -102,8 +118,10 @@ export default function ReportPage({
                         </Select>
                         <CustomButton
                             onClick={handleSaveReport}
+                            disabled={isSaving || hasSaved}
+                            className="h-9"
                             isBlack={false}>
-                            Save report
+                            {isSaving ? "Saving..." : hasSaved ? "Saved" : savedId ? "Save changes" : "Save report"}
                         </CustomButton>
                     </div>
                 </div>
@@ -118,29 +136,23 @@ export default function ReportPage({
                 {/* Info tip explaining the selected category */}
                 <CategoryInfoTip category={selectCategory} />
 
-                <GeneratedReport
-                    report={report}
-                    setReport={setReport}
-                    setTokens={setTokens}
-                    selectCategory={selectCategory}
-                    enrichedTrades={enrichedTrades}
-                    openPositions={positions}
-                    portfolioSummary={summary}
-                />
+                <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+                    <GeneratedReport
+                        report={report}
+                        setReport={setReport}
+                        setTokens={setTokens}
+                        selectCategory={selectCategory}
+                        enrichedTrades={enrichedTrades}
+                        openPositions={positions}
+                        portfolioSummary={summary}
+                    />
+                </div>
             </div>
         );
     } else {
         return (
-            <div className="h-screen flex items-center justify-center">
-                <GeneratedReport
-                    report={report}
-                    setReport={setReport}
-                    setTokens={setTokens}
-                    selectCategory={selectCategory}
-                    enrichedTrades={enrichedTrades}
-                    openPositions={positions}
-                    portfolioSummary={summary}
-                />
+            <div className="flex min-h-full items-center justify-center p-6">
+                <p className="text-sm text-zinc-500">No report is available.</p>
             </div>
         );
     }

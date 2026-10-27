@@ -13,17 +13,47 @@ import { getCapital } from "@/server/actions/user";
 import { useEffect, useState, useMemo } from "react";
 import { useMarketPrices } from "@/hooks/useMarketPrices";
 
+type RangeKey = "1M" | "3M" | "6M" | "YTD" | "ALL";
+
+const RANGE_OPTIONS: { value: RangeKey; label: string }[] = [
+    { value: "1M", label: "1M" },
+    { value: "3M", label: "3M" },
+    { value: "6M", label: "6M" },
+    { value: "YTD", label: "YTD" },
+    { value: "ALL", label: "All" },
+];
+
+function getRangeStart(range: RangeKey, now = new Date()) {
+    if (range === "1M") return new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+    if (range === "3M") return new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+    if (range === "6M") return new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+    if (range === "YTD") return new Date(now.getFullYear(), 0, 1);
+    return undefined;
+}
+
+function getRangeLabel(range: RangeKey) {
+    if (range === "ALL") return "All time";
+    if (range === "YTD") return "Year to date";
+    return `Last ${range.slice(0, -1)} month${range === "1M" ? "" : "s"}`;
+}
+
 export default function Page() {
     const [start, setStart] = useState<string | undefined>();
     const [isSwitchChartsActive, setIsSwitchChartsActive] = useState(false);
+    const [range, setRange] = useState<RangeKey>("ALL");
 
 
-    const trades = useAppSelector((state) => state.tradeRecords.listOfTrades);
-    // Statistics always operates on the full trade history so that Account
-    // Overview and all charts share one consistent data scope. The History
-    // page filter (filteredTrades) is intentionally NOT applied here.
+    const allTrades = useAppSelector((state) => state.tradeRecords.listOfTrades);
+    const filteredTrades = useAppSelector((state) => state.history.filteredTrades);
+    // Analytics follow the symbol filter. Account Overview intentionally uses all dates.
+    const trades = useMemo(() => filteredTrades ?? allTrades ?? [], [filteredTrades, allTrades]);
+    const rangeStart = useMemo(() => getRangeStart(range), [range]);
+    const analyticsRange = useMemo(
+        () => (rangeStart ? { start: rangeStart } : undefined),
+        [rangeStart]
+    );
+    const rangeLabel = getRangeLabel(range);
     const localCapital = useAppSelector((state) => state.statistics.capital);
-    const tradesToSort = useMemo(() => trades || [], [trades]);
     const startValueToUse = localCapital ?? start;
 
     // Get symbols for open positions to fetch live prices
@@ -35,7 +65,15 @@ export default function Page() {
         return [...new Set(openTrades.map((t) => t.symbolName).filter(Boolean))];
     }, [openTrades]);
 
-    const { prices } = useMarketPrices(openSymbols);
+    const {
+        prices,
+        loading: pricesLoading,
+        lastUpdated: pricesLastUpdated,
+        error: pricesError,
+    } = useMarketPrices(openSymbols);
+    const quotesSettled =
+        openSymbols.length === 0 ||
+        (!pricesLoading && (pricesLastUpdated !== null || pricesError));
 
     // Live account overview calculations
     const accountOverview = useMemo(() => {
@@ -43,6 +81,7 @@ export default function Page() {
         let netRealizedPnL = 0;
         let totalUnrealizedPnL = 0;
         let openPositionExposure = 0;
+        let unpricedOpenLots = 0;
 
         for (const trade of trades || []) {
             const isClosed = Boolean(trade.closeDate && trade.closeDate !== "");
@@ -59,12 +98,20 @@ export default function Page() {
 
                 if (remainingQty > 0) {
                     const entryPrice = parseFloat(String(trade.entryPrice || "0")) || 0;
-                    const currentPrice = prices[trade.symbolName] ?? null;
+                    const currentPrice =
+                        prices[trade.symbolName] !== null &&
+                        Number.isFinite(prices[trade.symbolName])
+                            ? prices[trade.symbolName]
+                            : null;
 
                     if (currentPrice !== null && !isNaN(entryPrice) && entryPrice > 0) {
                         const isSell = trade.positionType?.trim().toLowerCase() === "sell";
                         const pnl = (currentPrice - entryPrice) * remainingQty * (isSell ? -1 : 1);
                         totalUnrealizedPnL += pnl;
+                    }
+
+                    if (currentPrice === null && quotesSettled) {
+                        unpricedOpenLots += 1;
                     }
 
                     const priceForExposure = currentPrice !== null ? currentPrice : entryPrice;
@@ -84,17 +131,18 @@ export default function Page() {
             unrealizedPnL: totalUnrealizedPnL,
             openPositionExposure,
             exposureMultiple,
+            unpricedOpenLots,
         };
-    }, [trades, startValueToUse, prices]);
+    }, [trades, startValueToUse, prices, quotesSettled]);
 
     const tradingData = useMemo(
-        () => getDataForSummaryChartGridPageOne(tradesToSort, startValueToUse),
-        [tradesToSort, startValueToUse]
+        () => getDataForSummaryChartGridPageOne(trades, startValueToUse, analyticsRange),
+        [trades, startValueToUse, analyticsRange]
     );
 
     const otherData = useMemo(
-        () => getOtherDataForGridPageOne(tradesToSort),
-        [tradesToSort]
+        () => getOtherDataForGridPageOne(trades, analyticsRange),
+        [trades, analyticsRange]
     );
 
     useEffect(() => {
@@ -110,7 +158,7 @@ export default function Page() {
 
     const endValue = useMemo(() => {
         if (startValueToUse === undefined) return undefined;
-        const reducedTotal = (trades || []).reduce((acc, cur) => {
+        const reducedTotal = trades.reduce((acc, cur) => {
             // Only count closed trades for total account balance
             if (!cur.closeDate || cur.closeDate === "") return acc;
             const resultVal = Number(cur.result);
@@ -120,8 +168,15 @@ export default function Page() {
     }, [startValueToUse, trades]);
 
     const otherDataPageTwo = useMemo(
-        () => getOtherDataForGridPageTwo(tradesToSort, startValueToUse),
-        [tradesToSort, startValueToUse]
+        () => getOtherDataForGridPageTwo(trades, startValueToUse, analyticsRange),
+        [trades, startValueToUse, analyticsRange]
+    );
+    const closedTradeCount = useMemo(
+        () =>
+            trades.filter(
+                (trade) => Boolean(trade.closeDate && trade.closeDate !== "")
+            ).length,
+        [trades]
     );
 
     return (
@@ -131,9 +186,16 @@ export default function Page() {
                 <div className="flex items-center justify-between">
                     <div>
                         <h2 className="text-xl font-bold text-zinc-900 tracking-tight">Account Overview</h2>
-                        <p className="text-xs text-zinc-500">Real-time starting capital, current equity, and exposure metrics.</p>
+                        <p className="text-xs text-zinc-500">
+                            Current account · selected symbols · all dates
+                        </p>
                     </div>
                 </div>
+                {accountOverview.unpricedOpenLots > 0 && (
+                    <p className="text-xs text-amber-700">
+                        {accountOverview.unpricedOpenLots} open {accountOverview.unpricedOpenLots === 1 ? "lot has" : "lots have"} no live quote. Exposure includes cost estimates; unrealized P&amp;L excludes unpriced lots.
+                    </p>
+                )}
                 <div className="mt-2">
                     <OdometerConditionalRendering
                         startingCapital={accountOverview.startingCapital}
@@ -147,10 +209,11 @@ export default function Page() {
                 </div>
             </div>
 
-            <div className="flex items-center justify-between border-b border-zinc-200/80 px-4 mt-2">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200/80 px-4 mt-2">
                 <div className="flex gap-6">
                     <button
                         onClick={() => setIsSwitchChartsActive(false)}
+                        aria-pressed={!isSwitchChartsActive}
                         className={`pb-3 text-sm font-semibold transition-all relative ${
                             !isSwitchChartsActive
                                 ? "text-zinc-900 font-bold"
@@ -164,6 +227,7 @@ export default function Page() {
                     </button>
                     <button
                         onClick={() => setIsSwitchChartsActive(true)}
+                        aria-pressed={isSwitchChartsActive}
                         className={`pb-3 text-sm font-semibold transition-all relative ${
                             isSwitchChartsActive
                                 ? "text-zinc-900 font-bold"
@@ -176,6 +240,31 @@ export default function Page() {
                         )}
                     </button>
                 </div>
+                <div className="mb-2 flex flex-wrap items-center gap-3">
+                    <div>
+                        <span className="text-xs text-zinc-500">
+                            Analytics range <span className="font-medium text-zinc-800">{rangeLabel}</span>
+                        </span>
+                        <p className="text-[11px] text-zinc-400">Applies to the analytics below only.</p>
+                    </div>
+                    <div className="flex items-center rounded-lg border border-zinc-200 bg-white p-0.5" role="group" aria-label="Statistics period">
+                        {RANGE_OPTIONS.map((option) => (
+                            <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => setRange(option.value)}
+                                aria-pressed={range === option.value}
+                                className={`min-w-9 rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 ${
+                                    range === option.value
+                                        ? "bg-zinc-900 text-white"
+                                        : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                                }`}
+                            >
+                                {option.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
             </div>
 
             {isSwitchChartsActive ? (
@@ -183,11 +272,13 @@ export default function Page() {
                     start={startValueToUse}
                     end={endValue}
                     oterData={otherDataPageTwo}
+                    closedTradeCount={closedTradeCount}
                 />
             ) : (
                 <StatsGridPageOne
                     tradingData={tradingData}
                     otherData={otherData}
+                    scopeLabel={rangeLabel}
                 />
             )}
         </div>

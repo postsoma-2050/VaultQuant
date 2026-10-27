@@ -27,10 +27,19 @@ export default function ImportExportModal({ isOpen, onClose }: ImportExportModal
 
     if (!isOpen) return null;
 
+    const resetSelection = () => {
+        setFile(null);
+        setPreviewData(null);
+        setClearExisting(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+
     const processFilePreview = async (selectedFile: File) => {
         setFile(selectedFile);
+        setPreviewData(null);
+        setClearExisting(false);
         setIsLoading(true);
-        setProgressStatus("Parsing & running Ghostfolio Dry-Run Preview...");
+        setProgressStatus("Parsing and validating import file...");
 
         try {
             const text = await selectedFile.text();
@@ -40,16 +49,22 @@ export default function ImportExportModal({ isOpen, onClose }: ImportExportModal
             const preview = await previewImportAction(text, fileType);
             if (preview.success) {
                 setPreviewData(preview);
-                toast.success(`Preview ready: ${preview.sanitizedCount} transactions clustered into ${preview.campaigns.length} campaigns`);
+                const entityTotal = Object.values(preview.entityCounts).reduce(
+                    (sum, count) => sum + count,
+                    0
+                );
+                toast.success(
+                    preview.isFullBackup
+                        ? `Backup preview ready: ${entityTotal} records across ${Object.values(preview.entityCounts).filter((count) => count > 0).length} entity types`
+                        : `Preview ready: ${preview.sanitizedCount} trades`
+                );
             } else {
                 toast.error(preview.error || "Failed to preview file");
-                setPreviewData(null);
             }
         } catch (err: unknown) {
             console.error("Preview error:", err);
             const msg = err instanceof Error ? err.message : "Unknown error";
             toast.error("File preview error: " + msg);
-            setPreviewData(null);
         } finally {
             setIsLoading(false);
             setProgressStatus("");
@@ -113,8 +128,7 @@ export default function ImportExportModal({ isOpen, onClose }: ImportExportModal
                 }
 
                 toast.success(`Successfully committed ${result.importedCount} Trade Campaigns!`);
-                setFile(null);
-                setPreviewData(null);
+                resetSelection();
                 onClose();
             } else {
                 toast.error(result.error || "Failed to import file. Please check file format.");
@@ -162,7 +176,7 @@ export default function ImportExportModal({ isOpen, onClose }: ImportExportModal
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            toast.success("Full JSON backup export completed!");
+            toast.success("Full JSON backup export completed (all local data).");
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : "Unknown error";
             toast.error("Failed to export JSON backup: " + msg);
@@ -182,10 +196,10 @@ export default function ImportExportModal({ isOpen, onClose }: ImportExportModal
                         </div>
                         <div>
                             <h3 className="font-semibold text-base text-zinc-900 dark:text-zinc-100">
-                                Data Import & Backup Restore
+                                Import & Full Backup Restore
                             </h3>
                             <p className="text-xs text-zinc-500">
-                                Ghostfolio-Grade CSV Sanitization & Campaign Engine Preview
+                                CSV trade import or complete local JSON restore
                             </p>
                         </div>
                     </div>
@@ -205,7 +219,7 @@ export default function ImportExportModal({ isOpen, onClose }: ImportExportModal
                                 ? "border-amber-500 text-amber-600 dark:text-amber-400"
                                 : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
                         }`}>
-                        Import Trades
+                        Import / Restore
                     </button>
                     <button
                         onClick={() => setActiveTab("export")}
@@ -214,7 +228,7 @@ export default function ImportExportModal({ isOpen, onClose }: ImportExportModal
                                 ? "border-amber-500 text-amber-600 dark:text-amber-400"
                                 : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
                         }`}>
-                        Export Backup
+                        Export
                     </button>
                 </div>
 
@@ -245,7 +259,7 @@ export default function ImportExportModal({ isOpen, onClose }: ImportExportModal
                                                 {file ? file.name : "Click to choose file or drag & drop here"}
                                             </p>
                                             <p className="text-xs text-zinc-400 mt-1">
-                                                Supports Futu / Moomoo, IBKR, Webull, Schwab & VaultQuant JSON
+                                                CSV broker trades or a VaultQuant full JSON backup
                                             </p>
                                         </div>
                                     </div>
@@ -254,10 +268,10 @@ export default function ImportExportModal({ isOpen, onClose }: ImportExportModal
                                     <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-xs text-amber-800 dark:text-amber-300 space-y-1">
                                         <div className="font-semibold flex items-center gap-1.5">
                                             <CheckCircle2 size={14} className="text-amber-500" />
-                                            Automatic Campaign Clustering & VWAP Aggregation
+                                            Validated before any database write
                                         </div>
                                         <p className="text-zinc-600 dark:text-zinc-400">
-                                            Scale-in buys are aggregated into campaign VWAPs, and scale-outs are grouped into clean trade cards with Dry-Run validation.
+                                            CSV broker rows are sanitized and clustered into campaigns. Full JSON backups restore trades, strategies, journals, reports, and the local profile together.
                                         </p>
                                     </div>
                                 </>
@@ -270,82 +284,98 @@ export default function ImportExportModal({ isOpen, onClose }: ImportExportModal
                                             <Eye className="w-4 h-4 text-amber-500" />
                                             <span className="font-semibold text-zinc-800 dark:text-zinc-200">{file?.name}</span>
                                         </div>
-                                        <div className="flex items-center gap-3 text-zinc-500 font-mono">
-                                            <span>Raw Rows: <b>{previewData.rawRecordCount}</b></span>
-                                            <span>•</span>
-                                            <span>Sanitized: <b>{previewData.sanitizedCount}</b></span>
-                                            <span>•</span>
-                                            <span className="text-amber-600 dark:text-amber-400 font-bold">Campaigns: {previewData.campaigns.length}</span>
-                                        </div>
+                                        {previewData.isFullBackup ? (
+                                            <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-zinc-500 font-mono">
+                                                <span>Trades: <b>{previewData.entityCounts.trades}</b></span>
+                                                <span>Strategies: <b>{previewData.entityCounts.strategies}</b></span>
+                                                <span>Journals: <b>{previewData.entityCounts.journals}</b></span>
+                                                <span>Reports: <b>{previewData.entityCounts.reports}</b></span>
+                                                <span>Profile: <b>{previewData.entityCounts.users}</b></span>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-3 text-zinc-500 font-mono">
+                                                <span>Raw Rows: <b>{previewData.rawRecordCount}</b></span>
+                                                <span>•</span>
+                                                <span>Sanitized: <b>{previewData.sanitizedCount}</b></span>
+                                                <span>•</span>
+                                                <span className="text-amber-600 dark:text-amber-400 font-bold">Campaigns: {previewData.campaigns.length}</span>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Table */}
-                                    <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-xs">
-                                        <div className="max-h-60 overflow-y-auto">
-                                            <table className="w-full text-left text-xs">
-                                                <thead className="bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-mono uppercase sticky top-0 border-b border-zinc-200 dark:border-zinc-700">
-                                                    <tr>
-                                                        <th className="px-3 py-2">Symbol</th>
-                                                        <th className="px-3 py-2">Type</th>
-                                                        <th className="px-3 py-2">Status</th>
-                                                        <th className="px-3 py-2">Open / Close Date</th>
-                                                        <th className="px-3 py-2 text-right">Qty</th>
-                                                        <th className="px-3 py-2 text-right">VWAP Entry</th>
-                                                        <th className="px-3 py-2 text-right">Exit / PnL</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                                                    {previewData.campaigns.map((c, idx) => {
-                                                        const pnlNum = c.result ? Number(c.result) : 0;
-                                                        return (
-                                                            <tr key={c.id || idx} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 font-mono">
-                                                                <td className="px-3 py-2.5 font-bold text-zinc-900 dark:text-zinc-100">
-                                                                    {c.symbolName}
-                                                                </td>
-                                                                <td className="px-3 py-2.5">
-                                                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-500/10 text-emerald-600">
-                                                                        {c.positionType}
-                                                                    </span>
-                                                                </td>
-                                                                <td className="px-3 py-2.5">
-                                                                    {c.isActiveTrade ? (
-                                                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                                                                            OPEN
-                                                                        </span>
-                                                                    ) : (
-                                                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
-                                                                            CLOSED
-                                                                        </span>
-                                                                    )}
-                                                                </td>
-                                                                <td className="px-3 py-2.5 text-zinc-500 text-[11px]">
-                                                                    {c.openDate} {c.closeDate ? `→ ${c.closeDate}` : ""}
-                                                                </td>
-                                                                <td className="px-3 py-2.5 text-right font-medium">
-                                                                    {c.quantity}
-                                                                </td>
-                                                                <td className="px-3 py-2.5 text-right">
-                                                                    ${c.entryPrice}
-                                                                </td>
-                                                                <td className="px-3 py-2.5 text-right font-bold">
-                                                                    {c.isActiveTrade ? (
-                                                                        <span className="text-zinc-400">—</span>
-                                                                    ) : pnlNum >= 0 ? (
-                                                                        <span className="text-emerald-600 dark:text-emerald-400">+${pnlNum.toFixed(2)}</span>
-                                                                    ) : (
-                                                                        <span className="text-rose-600 dark:text-rose-400">-${Math.abs(pnlNum).toFixed(2)}</span>
-                                                                    )}
-                                                                </td>
-                                                            </tr>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
+                                    {previewData.isFullBackup && previewData.campaigns.length === 0 ? (
+                                        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-xs text-amber-800 dark:text-amber-300">
+                                            This backup contains no trades. Its strategies, journals, reports, and profile will still be restored exactly as previewed.
                                         </div>
-                                    </div>
+                                    ) : (
+                                        <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-xs">
+                                            <div className="max-h-60 overflow-y-auto">
+                                                <table className="w-full text-left text-xs">
+                                                    <thead className="bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-mono uppercase sticky top-0 border-b border-zinc-200 dark:border-zinc-700">
+                                                        <tr>
+                                                            <th className="px-3 py-2">Symbol</th>
+                                                            <th className="px-3 py-2">Type</th>
+                                                            <th className="px-3 py-2">Status</th>
+                                                            <th className="px-3 py-2">Open / Close Date</th>
+                                                            <th className="px-3 py-2 text-right">Qty</th>
+                                                            <th className="px-3 py-2 text-right">VWAP Entry</th>
+                                                            <th className="px-3 py-2 text-right">Exit / PnL</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                                                        {previewData.campaigns.map((c, idx) => {
+                                                            const pnlNum = c.result ? Number(c.result) : 0;
+                                                            return (
+                                                                <tr key={c.id || idx} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 font-mono">
+                                                                    <td className="px-3 py-2.5 font-bold text-zinc-900 dark:text-zinc-100">
+                                                                        {c.symbolName}
+                                                                    </td>
+                                                                    <td className="px-3 py-2.5">
+                                                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-500/10 text-emerald-600">
+                                                                            {c.positionType}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-3 py-2.5">
+                                                                        {c.isActiveTrade ? (
+                                                                            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                                                                OPEN
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
+                                                                                CLOSED
+                                                                            </span>
+                                                                        )}
+                                                                    </td>
+                                                                    <td className="px-3 py-2.5 text-zinc-500 text-[11px]">
+                                                                        {c.openDate} {c.closeDate ? `→ ${c.closeDate}` : ""}
+                                                                    </td>
+                                                                    <td className="px-3 py-2.5 text-right font-medium">
+                                                                        {c.quantity}
+                                                                    </td>
+                                                                    <td className="px-3 py-2.5 text-right">
+                                                                        ${c.entryPrice}
+                                                                    </td>
+                                                                    <td className="px-3 py-2.5 text-right font-bold">
+                                                                        {c.isActiveTrade ? (
+                                                                            <span className="text-zinc-400">—</span>
+                                                                        ) : pnlNum >= 0 ? (
+                                                                            <span className="text-emerald-600 dark:text-emerald-400">+${pnlNum.toFixed(2)}</span>
+                                                                        ) : (
+                                                                            <span className="text-rose-600 dark:text-rose-400">-${Math.abs(pnlNum).toFixed(2)}</span>
+                                                                        )}
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Options Checkbox */}
-                                    <div className="flex items-center justify-between px-1 pt-1">
+                                    <div className="flex flex-col gap-2 px-1 pt-1">
                                         <label className="flex items-center gap-2 cursor-pointer text-xs text-zinc-600 dark:text-zinc-400 select-none">
                                             <input
                                                 type="checkbox"
@@ -353,18 +383,24 @@ export default function ImportExportModal({ isOpen, onClose }: ImportExportModal
                                                 onChange={(e) => setClearExisting(e.target.checked)}
                                                 className="w-4 h-4 rounded border-zinc-300 text-amber-500 focus:ring-amber-500/20 cursor-pointer"
                                             />
-                                            <span>Overwrite / Replace existing trades (Clean Re-sync)</span>
+                                            <span>
+                                                {previewData.isFullBackup
+                                                    ? "Replace all trades, strategies, journals, and saved reports with this backup"
+                                                    : "Replace all existing trades with this CSV (strategies, journals, and reports stay unchanged)"}
+                                            </span>
                                         </label>
+                                        <p className="text-[11px] text-zinc-400">
+                                            Unchecked merges records by ID without deleting existing data. Checked replaces the stated scope. Validation completes before any write, and each import commits atomically; an error leaves the current database unchanged.
+                                        </p>
+                                        <div className="flex justify-end">
 
                                         <button
                                             type="button"
-                                            onClick={() => {
-                                                setPreviewData(null);
-                                                setFile(null);
-                                            }}
+                                            onClick={resetSelection}
                                             className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 underline cursor-pointer">
                                             Select another file
                                         </button>
+                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -391,7 +427,9 @@ export default function ImportExportModal({ isOpen, onClose }: ImportExportModal
                                     ) : (
                                         <>
                                             <Upload size={16} />
-                                            Confirm & Import {previewData.campaigns.length} Campaigns
+                                            {previewData.isFullBackup
+                                                ? `Restore ${previewData.entityCounts.trades} Trades, ${previewData.entityCounts.strategies} Strategies, ${previewData.entityCounts.journals} Journals & ${previewData.entityCounts.reports} Reports`
+                                                : `Confirm & Import ${previewData.campaigns.length} Campaigns`}
                                         </>
                                     )}
                                 </button>
@@ -400,7 +438,7 @@ export default function ImportExportModal({ isOpen, onClose }: ImportExportModal
                     ) : (
                         <div className="space-y-4">
                             <p className="text-xs text-zinc-500">
-                                Export all historical trade records and system configurations for full data archive and backup.
+                                CSV exports trades only. The full JSON backup includes every local trade, strategy, journal, saved report, and profile setting.
                             </p>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
@@ -417,7 +455,7 @@ export default function ImportExportModal({ isOpen, onClose }: ImportExportModal
                                             Export CSV Format
                                         </h4>
                                         <p className="text-xs text-zinc-400 mt-0.5">
-                                            Compatible with Excel & quantitative tools
+                                            Trades only; compatible with Excel and quantitative tools
                                         </p>
                                     </div>
                                 </button>
@@ -435,7 +473,7 @@ export default function ImportExportModal({ isOpen, onClose }: ImportExportModal
                                             Full JSON Backup
                                         </h4>
                                         <p className="text-xs text-zinc-400 mt-0.5">
-                                            Includes trades, daily journals, & strategy rules
+                                            Complete restorable backup: trades, strategies, journals, reports, and profile
                                         </p>
                                     </div>
                                 </button>

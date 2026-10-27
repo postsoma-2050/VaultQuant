@@ -467,7 +467,7 @@ export const AdjustPositionTab = ({
                                                     {previewPL !== null ? `${previewPL >= 0 ? "+" : ""}$${previewPL.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
                                                 </span>
                                                 {previewPLPercent !== null && (
-                                                    <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded ${
+                                                    <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
                                                         previewPLPercent >= 0 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"
                                                     }`}>
                                                         {previewPLPercent >= 0 ? "+" : ""}{previewPLPercent.toFixed(2)}%

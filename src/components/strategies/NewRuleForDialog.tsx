@@ -91,25 +91,29 @@ export default function NewRuleForDialog({
                         </div>
                     </div>
                 ) : (
-                    <div
+                    <button
+                        type="button"
                         onClick={() => setIsEditingName(true)}
-                        className="flex items-center gap-2 cursor-pointer py-1 px-2 rounded-md hover:bg-neutral-100 transition-colors group/text"
+                        aria-label={`Edit rule: ${rule.rule}`}
+                        className="flex w-full items-center gap-2 py-1 px-2 rounded-md text-left hover:bg-zinc-100 transition-colors group/text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
                     >
-                        <span className="text-sm text-neutral-700 truncate max-w-[280px]">
+                        <span className="text-[13px] text-zinc-700 truncate">
                             {rule.rule}
                         </span>
-                        <Pencil size={12} className="opacity-0 group-hover/text:opacity-100 text-neutral-400" />
-                    </div>
+                        <Pencil size={12} className="shrink-0 opacity-0 group-hover/text:opacity-100 text-zinc-400" />
+                    </button>
                 )}
             </TableCell>
 
             <TableCell className="py-3">
-                <div 
+                <button
+                    type="button"
                     onClick={handleChangePriority}
+                    aria-label={`Change priority. Current priority: ${rule.priority}`}
                     className={`
-                        inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer transition-all select-none
+                        inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-colors select-none
                         ${rulesStyle[rule.priority]}
-                        hover:opacity-90 active:scale-95
+                        hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400
                     `}
                 >
                     <span className={`w-1.5 h-1.5 rounded-full ${
@@ -117,15 +121,16 @@ export default function NewRuleForDialog({
                         rule.priority === 'medium' ? 'bg-amber-500' : 
                         'bg-emerald-500'
                     }`} />
-                    {rule.priority.charAt(0).toUpperCase() + rule.priority.slice(1)} Priority
-                </div>
+                    {rule.priority.charAt(0).toUpperCase() + rule.priority.slice(1)}
+                </button>
             </TableCell>
 
             <TableCell className="py-3 text-right">
                 <button
+                    type="button"
                     onClick={handleDeleteRule}
-                    className="p-2 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                    title="Delete Rule"
+                    aria-label={`Delete rule: ${rule.rule}`}
+                    className="p-2 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
                 >
                     <Trash2 size={16} />
                 </button>

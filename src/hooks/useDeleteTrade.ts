@@ -9,6 +9,7 @@ import {
 } from "@/redux/slices/tradeRecordsSlice";
 import { removeTradeFromFilteredList } from "@/redux/slices/historyPageSlice";
 import { toast } from "sonner";
+import { parseCalendarDate } from "@/features/history/sortTrades";
 
 export const useDeleteTrade = () => {
     const dispatch = useAppDispatch();
@@ -17,16 +18,21 @@ export const useDeleteTrade = () => {
         tradeId: string,
         result?: string,
         closeDate?: string
-    ) => {
+    ): Promise<boolean> => {
         try {
-            await deleteTradeRecord(tradeId);
+            const deleteResult = await deleteTradeRecord(tradeId);
+            if (deleteResult?.error) {
+                toast.error("Failed to delete record. Please try again.");
+                return false;
+            }
+
             dispatch(removeRecordFromListOfTrades(tradeId));
             dispatch(removeTradeFromFilteredList(tradeId));
 
             if (closeDate && result !== undefined && result !== null && result !== "") {
                 try {
-                    const parsedDate = new Date(closeDate);
-                    if (!isNaN(parsedDate.getTime())) {
+                    const parsedDate = parseCalendarDate(closeDate);
+                    if (parsedDate) {
                         const [stringDay, month, year] = parsedDate
                             .toLocaleDateString("en-GB")
                             .split("/");
@@ -66,9 +72,11 @@ export const useDeleteTrade = () => {
             }
 
             toast.success("Trade record deleted successfully!");
+            return true;
         } catch (error) {
             console.error(error);
             toast.error("Failed to delete record. Please try again.");
+            return false;
         }
     };
 

@@ -13,6 +13,9 @@ export default {
 			colors: {
 				background: 'var(--background)',
 				foreground: 'var(--foreground)',
+				border: 'var(--border)',
+				input: 'var(--input)',
+				ring: 'var(--ring)',
 				primary: 'var(--primary)',
 				darkPrimary: 'var(--darkPrimary)',
 				secondary: 'var(--secondary)',
@@ -28,6 +31,10 @@ export default {
 				customBlue: 'var(--customBlue)',
 				customOrange: 'var(--customOrange)',
 				customYellow: 'var(--customYellow)'
+			},
+			boxShadow: {
+				'2xs': '0 1px 1px 0 rgb(0 0 0 / 0.03)',
+				'xs': '0 1px 2px 0 rgb(0 0 0 / 0.05)',
 			},
 			borderRadius: {
 				lg: 'var(--radius)',

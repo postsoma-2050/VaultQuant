@@ -23,6 +23,7 @@ import {
 import { setIsDialogOpen } from "@/redux/slices/calendarSlice";
 import { updateTradeInFilteredList } from "@/redux/slices/historyPageSlice";
 import { Trades } from "@/types";
+import { getAllTradeRecords } from "@/server/actions/trades";
 
 interface UseTradeFormProps {
     editMode?: boolean;
@@ -257,11 +258,9 @@ export const useTradeForm = ({ editMode = false, existingTrade, day, onRequestCl
                         return;
                     }
 
-                    const tradeForRedux = {
-                        id: existingTrade.id,
-                        ...baseData,
-                        notes: existingTrade.notes,
-                    };
+                    const records = await getAllTradeRecords();
+                    const tradeForRedux = records.find((trade) => trade.id === existingTrade.id);
+                    if (!tradeForRedux) throw new Error("The saved trade could not be refreshed.");
                     dispatch(updateTradeInList(tradeForRedux));
                     dispatch(updateTradeInFilteredList(tradeForRedux));
                     toast.success("Trade updated successfully!");

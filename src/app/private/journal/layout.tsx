@@ -1,5 +1,6 @@
 import { getJournalDatesWithSummaries } from "@/server/actions/journal";
 import { JournalSidebar } from "@/components/journal/JournalSidebar";
+import { JournalDraftProvider } from "@/components/journal/JournalDraftContext";
 
 export default async function JournalLayout({
     children,
@@ -9,11 +10,13 @@ export default async function JournalLayout({
     const dates = await getJournalDatesWithSummaries();
 
     return (
-        <div className="flex h-full">
+        <JournalDraftProvider>
+            <div className="flex h-full min-h-0 min-w-0">
             <JournalSidebar dates={dates} />
-            <div className="flex-1 overflow-y-auto bg-white">
+            <div className="min-w-0 flex-1 bg-white">
                 {children}
             </div>
-        </div>
+            </div>
+        </JournalDraftProvider>
     );
 }

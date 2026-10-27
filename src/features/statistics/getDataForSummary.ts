@@ -7,8 +7,24 @@ interface DensePoint {
     symbolName: string;
 }
 
+export interface AnalyticsRange {
+    start?: Date;
+    end?: Date;
+}
+
+export type AnalyticsClose = {
+    id: string;
+    date: string;
+    time: string;
+    result: number;
+    symbolName: string;
+    positionType: string;
+    source: "event" | "legacy";
+    trade: Trades;
+};
+
 /** Parses a local date & time without UTC time-zone shifts. */
-function parseLocalDate(dateStr: string, timeStr: string = "00:00"): Date {
+export function parseStatisticsDate(dateStr: string, timeStr: string = "00:00"): Date {
     if (!dateStr) return new Date();
     const datePart = dateStr.split("T")[0];
     const [y, m, d] = datePart.split("-").map(Number);
@@ -23,41 +39,126 @@ function parseLocalDate(dateStr: string, timeStr: string = "00:00"): Date {
     );
 }
 
+export function isDateInAnalyticsRange(date: Date, range?: AnalyticsRange): boolean {
+    if (!range?.start && !range?.end) return true;
+    if (!Number.isFinite(date.getTime())) return false;
+    if (range.start && date < range.start) return false;
+    if (range.end && date > range.end) return false;
+    return true;
+}
+
+export function getAnalyticsCloses(
+    trades: Trades[],
+    range?: AnalyticsRange
+): AnalyticsClose[] {
+    const closes: AnalyticsClose[] = [];
+
+    for (const trade of trades) {
+        if (trade.closeEvents && trade.closeEvents.length > 0) {
+            for (const [index, event] of trade.closeEvents.entries()) {
+                if (!event.date) continue;
+                const quantityChange =
+                    event.quantityChange ?? -(event.quantitySold ?? 0);
+                if (quantityChange >= 0) continue;
+
+                const date = parseStatisticsDate(event.date, event.time);
+                if (!isDateInAnalyticsRange(date, range)) continue;
+
+                closes.push({
+                    id: event.id || `${trade.id}-event-${index}`,
+                    date: event.date,
+                    time: event.time || "00:00",
+                    result: Number(event.result) || 0,
+                    symbolName: trade.symbolName,
+                    positionType: trade.positionType,
+                    source: "event",
+                    trade,
+                });
+            }
+        } else if (trade.closeDate) {
+            const date = parseStatisticsDate(trade.closeDate, trade.closeTime);
+            if (!isDateInAnalyticsRange(date, range)) continue;
+
+            closes.push({
+                id: `legacy-${trade.id}`,
+                date: trade.closeDate,
+                time: trade.closeTime || "00:00",
+                result: Number(trade.result) || 0,
+                symbolName: trade.symbolName,
+                positionType: trade.positionType,
+                source: "legacy",
+                trade,
+            });
+        }
+    }
+
+    return closes.sort((a, b) => {
+        const dateDiff =
+            parseStatisticsDate(a.date, a.time).getTime() -
+            parseStatisticsDate(b.date, b.time).getTime();
+        return dateDiff || a.time.localeCompare(b.time);
+    });
+}
+
+/**
+ * Scopes analytics by each realized event's own date. A parent campaign can
+ * straddle a range boundary, so filtering the parent trade first is incorrect.
+ */
+export function scopeTradesToAnalyticsRange(
+    trades: Trades[],
+    range?: AnalyticsRange
+): Trades[] {
+    if (!range?.start && !range?.end) return trades;
+
+    return trades.flatMap((trade) => {
+        if (trade.closeEvents && trade.closeEvents.length > 0) {
+            const closeEvents = trade.closeEvents.filter((event) => {
+                if (!event.date) return false;
+                const inRange = isDateInAnalyticsRange(
+                    parseStatisticsDate(event.date, event.time),
+                    range
+                );
+                return inRange && (event.quantityChange ?? -(event.quantitySold ?? 0)) < 0;
+            });
+            return closeEvents.length > 0 ? [{ ...trade, closeEvents }] : [];
+        }
+
+        if (trade.closeDate) {
+            return isDateInAnalyticsRange(
+                parseStatisticsDate(trade.closeDate, trade.closeTime),
+                range
+            )
+                ? [trade]
+                : [];
+        }
+
+        return isDateInAnalyticsRange(
+            parseStatisticsDate(trade.openDate, trade.openTime),
+            range
+        )
+            ? [trade]
+            : [];
+    });
+}
+
 export function getDataForSummaryChartGridPageOne(
     trades: Trades[],
-    capital?: string | undefined
+    capital?: string | undefined,
+    range?: AnalyticsRange
 ): { date: Date; capital: number; pnl: number; symbolName: string; sp500?: number }[] {
     if (!Array.isArray(trades) || trades.length === 0) {
         return [];
     }
 
     const initialCapital = parseFloat(capital || "0") || 0;
-    const realisedEvents: DensePoint[] = [];
-
-    // Traverse trades to collect individual close events (transaction level)
-    for (const trade of trades) {
-        if (trade.closeEvents && trade.closeEvents.length > 0) {
-            // Trade with adjustment/close events (each recorded on its actual date)
-            for (const ev of trade.closeEvents) {
-                const evResult = ev.result || 0;
-                if (evResult === 0 || !ev.date) continue;
-                realisedEvents.push({
-                    date: parseLocalDate(ev.date, ev.time || "00:00"),
-                    timeStr: ev.time || "00:00",
-                    result: evResult,
-                    symbolName: trade.symbolName,
-                });
-            }
-        } else if (trade.closeDate && trade.closeDate !== "") {
-            // Legacy fully-closed trade without closeEvents
-            realisedEvents.push({
-                date: parseLocalDate(trade.closeDate, trade.closeTime || "00:00"),
-                timeStr: trade.closeTime || "00:00",
-                result: parseFloat(trade.result as unknown as string) || 0,
-                symbolName: trade.symbolName,
-            });
-        }
-    }
+    const realisedEvents: DensePoint[] = getAnalyticsCloses(trades, range)
+        .filter((close) => close.result !== 0)
+        .map((close) => ({
+            date: parseStatisticsDate(close.date, close.time),
+            timeStr: close.time,
+            result: close.result,
+            symbolName: close.symbolName,
+        }));
 
     // Sort events chronologically (date, then time)
     realisedEvents.sort((a, b) => {
@@ -99,8 +200,13 @@ export function getDataForSummaryChartGridPageOne(
     return resultArrayWithSP500;
 }
 
-export function getOtherDataForGridPageOne(trades: Trades[]) {
-    if (trades.length === 0)
+export function getOtherDataForGridPageOne(
+    trades: Trades[],
+    range?: AnalyticsRange
+) {
+    const scopedTrades = scopeTradesToAnalyticsRange(trades, range);
+    const analyticsCloses = getAnalyticsCloses(trades, range);
+    if (scopedTrades.length === 0)
         return {
             chartOne: {
                 succesfullPositions: 0,
@@ -132,38 +238,38 @@ export function getOtherDataForGridPageOne(trades: Trades[]) {
             },
         };
 
-    const closedTrades = trades.filter((trade) => Boolean(trade.closeDate));
+    const closedTrades = analyticsCloses;
     const closedBuyTrades = closedTrades.filter((trade) => trade.positionType === "buy");
     const closedSellTrades = closedTrades.filter((trade) => trade.positionType === "sell");
 
     const succesfullPositions = closedTrades.filter(
-        (trade) => Number(trade.result) > 0
+        (close) => close.result > 0
     ).length;
     const succesfullBuyPositions = closedBuyTrades.filter(
-        (trade) => Number(trade.result) > 0
+        (close) => close.result > 0
     ).length;
     const succesfullSellPositions = closedSellTrades.filter(
-        (trade) => Number(trade.result) > 0
+        (close) => close.result > 0
     ).length;
 
     // Use actual earliest openDate instead of relying on array order
-    const earliestOpenDate = trades.reduce(
+    const earliestOpenDate = scopedTrades.reduce(
         (earliest, t) => (t.openDate < earliest ? t.openDate : earliest),
-        trades[0]?.openDate || ""
+        scopedTrades[0]?.openDate || ""
     );
     const totalMonthFromFirstTrade = calculateMonthsDifference(earliestOpenDate);
 
     const closedBuyWithTimeCount = closedBuyTrades.filter(
-        (trade) => Boolean(trade.closeTime)
+        (close) => Boolean(close.time)
     ).length;
     const closedSellWithTimeCount = closedSellTrades.filter(
-        (trade) => Boolean(trade.closeTime)
+        (close) => Boolean(close.time)
     ).length;
 
     const averageTimeInBuyPosition =
         closedBuyWithTimeCount > 0
             ? Math.floor(
-                  calculateTotalTimeInPositionHours(trades, "buy") /
+                  calculateTotalTimeInPositionHours(scopedTrades, "buy") /
                       closedBuyWithTimeCount
               )
             : 0;
@@ -171,12 +277,12 @@ export function getOtherDataForGridPageOne(trades: Trades[]) {
     const averageTimeInSellPosition =
         closedSellWithTimeCount > 0
             ? Math.floor(
-                  calculateTotalTimeInPositionHours(trades, "sell") /
+                  calculateTotalTimeInPositionHours(scopedTrades, "sell") /
                       closedSellWithTimeCount
               )
             : 0;
 
-    const sequenceProfitLost = sequenceOfProfitableLostTrades(trades);
+    const sequenceProfitLost = sequenceOfProfitableLostCloses(analyticsCloses);
 
     return {
         chartOne: {
@@ -268,17 +374,12 @@ function calculateTotalTimeInPositionHours(
     return totalTimeInPositionHours;
 }
 
-function sequenceOfProfitableLostTrades(trades: Trades[]) {
-    if (trades.length === 0) return { profitable: 0, lost: 0 };
+function sequenceOfProfitableLostCloses(closes: AnalyticsClose[]) {
+    if (closes.length === 0) return { profitable: 0, lost: 0 };
 
-    const tradesCopy = [...trades].filter(
-        (trade): trade is Trades & { closeDate: string } =>
-            Boolean(trade.closeDate)
-    );
-
-    const sortedTrades = tradesCopy.sort((a, b) => {
-        const dateA = new Date(a.closeDate).getTime();
-        const dateB = new Date(b.closeDate).getTime();
+    const sortedTrades = [...closes].sort((a, b) => {
+        const dateA = parseStatisticsDate(a.date, a.time).getTime();
+        const dateB = parseStatisticsDate(b.date, b.time).getTime();
         return dateA - dateB;
     });
 
@@ -293,7 +394,7 @@ function sequenceOfProfitableLostTrades(trades: Trades[]) {
     for (let i = 0; i < sortedTrades.length; i++) {
         // Break-even (result === 0) is treated as a loss to keep streak definition
         // unambiguous: only strictly positive results extend a win streak.
-        if (Number(sortedTrades[i].result) > 0) {
+        if (sortedTrades[i].result > 0) {
             profitableTemp++;
 
             sequences.lost = Math.max(sequences.lost, lostTemp);

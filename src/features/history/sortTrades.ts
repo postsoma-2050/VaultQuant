@@ -1,8 +1,77 @@
 import { Trades, sortTradesFunctionType } from "@/types";
 
+type DateRangeLike = {
+    from?: Date;
+    to?: Date;
+};
+
+export function parseCalendarDate(value?: string): Date | null {
+    if (!value) return null;
+
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
+    if (!match) {
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    return new Date(
+        Number(match[1]),
+        Number(match[2]) - 1,
+        Number(match[3])
+    );
+}
+
+function startOfLocalDay(value: Date): Date {
+    const result = new Date(value);
+    result.setHours(0, 0, 0, 0);
+    return result;
+}
+
+function endOfLocalDay(value: Date): Date {
+    const result = new Date(value);
+    result.setHours(23, 59, 59, 999);
+    return result;
+}
+
+export function filterTradesBySymbolsAndDate({
+    trades,
+    selectedSymbols,
+    dateRange,
+}: {
+    trades: Trades[];
+    selectedSymbols: string[] | null;
+    dateRange?: DateRangeLike | null;
+}): Trades[] {
+    const selected = selectedSymbols === null
+        ? null
+        : new Set(selectedSymbols.map((symbol) => symbol.trim()));
+
+    const hasCompleteRange = Boolean(dateRange?.from && dateRange?.to);
+    const from = hasCompleteRange ? startOfLocalDay(dateRange!.from!) : null;
+    const to = hasCompleteRange ? endOfLocalDay(dateRange!.to!) : null;
+
+    return trades.filter((trade) => {
+        const symbol = trade.symbolName?.trim();
+        if (selected !== null && (!symbol || !selected.has(symbol))) {
+            return false;
+        }
+
+        if (!from || !to) return true;
+
+        const tradeDate = parseCalendarDate(trade.closeDate || trade.openDate);
+        if (!tradeDate) return false;
+
+        return tradeDate >= from && tradeDate <= to;
+    });
+}
+
 function timeStringToMinutes(time: string): number {
     const [hours, minutes] = time.split(":").map(Number);
     return hours * 60 + minutes;
+}
+
+function getTradeDateForTimeframe(trade: Trades): Date | null {
+    return parseCalendarDate(trade.closeDate || trade.openDate);
 }
 
 export const sortTrades = ({
@@ -14,33 +83,26 @@ export const sortTrades = ({
     let filtered: Trades[] = tradesToSort;
 
     if (timeframe !== "allHistory") {
-        filtered = tradesToSort.filter((trade): trade is Trades & { closeDate: string } =>
-            Boolean(trade.closeDate)
-        ).filter((trade) => {
-            const closeDate = new Date(trade.closeDate);
+        const today = startOfLocalDay(now);
+        const endOfToday = endOfLocalDay(now);
+        const weekStart = new Date(today);
+        weekStart.setDate(weekStart.getDate() - 6);
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
+        filtered = tradesToSort.filter((trade) => {
+            const tradeDate = getTradeDateForTimeframe(trade);
+            if (!tradeDate) return false;
             switch (timeframe) {
                 case "today": {
-                    return (
-                        closeDate.getDate() === now.getDate() &&
-                        closeDate.getMonth() === now.getMonth() &&
-                        closeDate.getFullYear() === now.getFullYear()
-                    );
+                    return tradeDate >= today && tradeDate <= endOfToday;
                 }
 
                 case "thisWeek": {
-                    const oneWeekAgo = new Date(now);
-                    oneWeekAgo.setDate(now.getDate() - 7);
-                    return closeDate >= oneWeekAgo && closeDate <= now;
+                    return tradeDate >= weekStart && tradeDate <= endOfToday;
                 }
 
                 case "thisMonth": {
-                    const startOfMonth = new Date(
-                        now.getFullYear(),
-                        now.getMonth(),
-                        1
-                    );
-                    return closeDate >= startOfMonth && closeDate <= now;
+                    return tradeDate >= monthStart && tradeDate <= endOfToday;
                 }
             }
         });
@@ -61,8 +123,8 @@ export const sortTrades = ({
                 if (!aDate || !bDate) return 0;
 
                 const compareDates =
-                    new Date(bDate).getTime() -
-                    new Date(aDate).getTime();
+                    (parseCalendarDate(bDate)?.getTime() ?? 0) -
+                    (parseCalendarDate(aDate)?.getTime() ?? 0);
 
                 // If they differ, return the date comparison
                 if (compareDates !== 0) {

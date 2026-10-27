@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { MdStar } from "react-icons/md";
-import { FaArrowTrendDown, FaArrowTrendUp } from "react-icons/fa6";
 import { BookOpen, Pencil, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 
 import { Trades } from "@/types";
@@ -25,7 +24,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import DeleteTradeDialog from "@/components/history/DeleteTradeDialog";
-import { StrategyRules } from "@/components/trade-dialog/StrategyRules";
+import StrategyRules from "@/components/strategies/StrategyRules";
 
 type ClosedTrade = Trades & {
     closeDate: string;
@@ -54,11 +53,16 @@ const formatPrice = (price: number | string): string => {
     });
 };
 
-const formatCurrency = (val: number): string => {
-    return val.toLocaleString("en-US", {
+const formatCurrency = (val: number, showSign = false): string => {
+    if (!Number.isFinite(val)) return "$0.00";
+    const isNegative = val < 0;
+    const formatted = Math.abs(val).toLocaleString("en-US", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     });
+    if (isNegative) return `-$${formatted}`;
+    if (showSign && val > 0) return `+$${formatted}`;
+    return `$${formatted}`;
 };
 
 const getHoldDuration = (openDateStr?: string, closeDateStr?: string): string => {
@@ -78,7 +82,7 @@ const getHoldDuration = (openDateStr?: string, closeDateStr?: string): string =>
 
 type CloseTradesTableProps = {
     trades: ClosedTrade[];
-    total: number;
+    total?: number;
 };
 
 export const CloseTradesTable = ({
@@ -118,7 +122,7 @@ export const CloseTradesTable = ({
 
     if (!trades || trades.length === 0) {
         return (
-            <div className="border border-zinc-200/80 rounded-xl p-8 text-center text-zinc-500 bg-white shadow-xs">
+            <div className="border border-zinc-200 rounded-lg p-8 text-center text-zinc-500 bg-white">
                 No closed trades yet
             </div>
         );
@@ -146,62 +150,55 @@ export const CloseTradesTable = ({
     const totalROIPercent = totalCost > 0 ? (netPnL / totalCost) * 100 : 0;
 
     return (
-        <div className="flex flex-col gap-4 pt-2 w-full max-w-none">
-            {/* Header Cards (3 Modular Metrics Cards matching Open Positions) */}
+        <div className="flex flex-col gap-4 pt-2 w-full min-w-0 max-w-none">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full">
-                {/* Card 1: Closed Trades & Win/Loss Count */}
-                <div className="border border-zinc-200/80 rounded-xl p-4 bg-white shadow-xs hover:border-zinc-300 transition-colors">
+                <div className="border border-zinc-200 rounded-lg p-4 bg-white">
                     <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Closed Trades</p>
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 border border-zinc-200/60 font-mono tabular-nums">
+                        <p className="text-[13px] font-medium text-zinc-500">Closed Trades</p>
+                        <span className="text-xs font-medium font-mono tabular-nums text-zinc-500">
                             {winCount}W - {lossCount}L
                         </span>
                     </div>
-                    <p className="text-2xl font-bold text-zinc-800 font-mono tabular-nums mt-2">{totalTrades}</p>
+                    <p className="text-2xl font-semibold text-zinc-900 font-mono tabular-nums mt-1.5">{totalTrades}</p>
                 </div>
 
-                {/* Card 2: Win Rate % */}
-                <div className="border border-zinc-200/80 rounded-xl p-4 bg-white shadow-xs hover:border-zinc-300 transition-colors">
+                <div className="border border-zinc-200 rounded-lg p-4 bg-white">
                     <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Win Rate</p>
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-mono tabular-nums">
+                        <p className="text-[13px] font-medium text-zinc-500">Win Rate</p>
+                        <span className="text-xs font-medium text-emerald-700 tabular-nums">
                             {winCount} Winners
                         </span>
                     </div>
-                    <p className="text-2xl font-bold text-zinc-800 font-mono tabular-nums mt-2">
+                    <p className="text-2xl font-semibold text-zinc-900 font-mono tabular-nums mt-1.5">
                         {winRate.toFixed(1)}%
                     </p>
                 </div>
 
-                {/* Card 3: Net Realized P/L */}
-                <div className="border border-zinc-200/80 rounded-xl p-4 bg-white shadow-xs hover:border-zinc-300 transition-colors">
+                <div className="border border-zinc-200 rounded-lg p-4 bg-white">
                     <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Net Realized P/L</p>
-                        <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border font-mono tabular-nums ${totalROIPercent >= 0 ? "bg-emerald-50 text-emerald-700 border-emerald-200/60" : "bg-rose-50 text-rose-700 border-rose-200/60"}`}>
-                            ROI {totalROIPercent >= 0 ? "+" : ""}{totalROIPercent.toFixed(1)}%
+                        <p className="text-[13px] font-medium text-zinc-500">Net Realized P/L</p>
+                        <span className={`text-xs font-medium font-mono tabular-nums ${totalROIPercent >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                            {totalROIPercent >= 0 ? "+" : ""}{totalROIPercent.toFixed(2)}%
                         </span>
                     </div>
-                    <p className={`text-2xl font-bold font-mono tabular-nums mt-2 ${netPnL >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                        {netPnL >= 0 ? "+$" : "-$"}{Math.abs(netPnL).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    <p className={`text-2xl font-semibold font-mono tabular-nums mt-1.5 ${netPnL >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                        {formatCurrency(netPnL, true)}
                     </p>
                 </div>
             </div>
 
-            {/* Trades List Table */}
-            <div className="border border-zinc-200/80 rounded-xl bg-white overflow-hidden shadow-xs w-full max-w-none">
-                {/* Header - Fixed 12 columns */}
-                <div className="grid grid-cols-12 gap-2 px-4 py-3 bg-zinc-50/80 border-b border-zinc-200 text-xs font-semibold uppercase tracking-wider text-zinc-500 w-full">
-                    <div className="col-span-5 md:col-span-3">Symbol</div>
-                    <div className="col-span-2 text-center hidden md:block">Open → Close</div>
-                    <div className="col-span-2 text-center hidden md:block">Entry → Exit</div>
-                    <div className="col-span-1 text-center hidden md:block">Qty</div>
-                    <div className="col-span-4 md:col-span-2 text-center">Result (%)</div>
-                    <div className="col-span-1 text-center hidden md:block">Rating</div>
-                    <div className="col-span-3 md:col-span-1 text-right">Actions</div>
+            <div className="border border-zinc-200 rounded-lg bg-white overflow-hidden w-full min-w-0 max-w-none">
+                <div className="grid grid-cols-20 gap-2 px-3 py-2.5 bg-zinc-50 border-b border-zinc-200 text-xs font-medium text-zinc-500 w-full">
+                    <div className="col-span-9 xl:col-span-4">Symbol</div>
+                    <div className="col-span-3 text-center hidden xl:block">Open → Close</div>
+                    <div className="col-span-3 text-center hidden xl:block">Entry → Exit</div>
+                    <div className="col-span-2 text-right pr-3 hidden xl:block">Qty</div>
+                    <div className="col-span-6 xl:col-span-3 text-right pr-3">Result (%)</div>
+                    <div className="col-span-2 text-center hidden xl:block">Rating</div>
+                    <div className="col-span-5 xl:col-span-3 text-right">Actions</div>
                 </div>
 
-                {/* Body - Scrollable */}
-                <div className="max-h-[65vh] overflow-y-auto divide-y divide-zinc-100 w-full">
+                <div className="divide-y divide-zinc-100 w-full">
                     {trades.map((trade) => {
                         const closeEvents = trade.closeEvents || [];
                         const isNewSystem = !!(trade.openOtherDetails && typeof trade.openOtherDetails === "object" && "initialQty" in trade.openOtherDetails);
@@ -263,36 +260,39 @@ export const CloseTradesTable = ({
                             <div key={trade.id} className="hover:bg-zinc-50/80 transition-colors w-full">
                                 {/* Main Row */}
                                 <div
-                                    className={`grid grid-cols-12 gap-2 px-4 py-3.5 items-center w-full ${hasPartials ? "cursor-pointer" : ""}`}
-                                    onClick={() => hasPartials && toggleExpanded(trade.id)}
+                                    className="grid grid-cols-20 gap-2 px-3 py-3 items-center w-full"
                                 >
-                                    {/* Symbol & Type */}
-                                    <div className="col-span-5 md:col-span-3 flex items-center gap-2">
+                                    <div className="col-span-9 xl:col-span-4 flex min-w-0 items-center gap-2">
                                         {hasPartials && (
-                                            <button className="shrink-0 text-zinc-400 hover:text-zinc-600 transition-colors">
+                                            <button
+                                                type="button"
+                                                aria-expanded={isExpanded}
+                                                aria-label={`${isExpanded ? "Collapse" : "Expand"} ${trade.symbolName} execution history`}
+                                                onClick={() => toggleExpanded(trade.id)}
+                                                className="shrink-0 rounded p-0.5 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+                                            >
                                                 {isExpanded ? (
-                                                    <ChevronDown className="w-4 h-4" />
+                                                    <ChevronDown className="w-4 h-4" aria-hidden="true" />
                                                 ) : (
-                                                    <ChevronRight className="w-4 h-4" />
+                                                    <ChevronRight className="w-4 h-4" aria-hidden="true" />
                                                 )}
                                             </button>
                                         )}
-                                        {trade.positionType === "buy" ? (
-                                            <span className="border border-emerald-300 text-emerald-700 bg-emerald-50 text-[11px] font-mono font-bold w-5 h-5 flex items-center justify-center rounded shrink-0">
-                                                L
-                                            </span>
-                                        ) : (
-                                            <span className="border border-rose-300 text-rose-700 bg-rose-50 text-[11px] font-mono font-bold w-5 h-5 flex items-center justify-center rounded shrink-0">
-                                                S
-                                            </span>
-                                        )}
+                                        <span
+                                            aria-label={trade.positionType === "buy" ? "Long" : "Short"}
+                                            className={`font-mono text-xs font-semibold shrink-0 ${
+                                                trade.positionType === "buy" ? "text-emerald-700" : "text-rose-700"
+                                            }`}
+                                        >
+                                            {trade.positionType === "buy" ? "Long" : "Short"}
+                                        </span>
                                         <div className="flex flex-col">
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="font-bold text-sm text-zinc-800 tracking-tight whitespace-nowrap">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <span className="font-semibold text-[13px] text-zinc-900 truncate">
                                                     {trade.symbolName}
                                                 </span>
                                                 {hasPartials && (
-                                                    <span className="border border-amber-300 text-amber-700 bg-amber-50 text-[10px] font-mono px-1.5 py-0.2 rounded font-semibold shrink-0">
+                                                    <span className="text-xs text-zinc-500 shrink-0">
                                                         Partial
                                                     </span>
                                                 )}
@@ -300,68 +300,56 @@ export const CloseTradesTable = ({
                                         </div>
                                     </div>
 
-                                    {/* Open → Close Date & Hold Duration */}
-                                    <div className="col-span-2 hidden md:flex flex-col items-center justify-center text-xs">
+                                    <div className="col-span-3 hidden xl:flex flex-col items-center justify-center text-xs">
                                         <div className="flex items-center gap-1 font-mono tabular-nums text-zinc-600">
                                             <span>
-                                                {new Intl.DateTimeFormat("en-GB", {
+                                                {new Intl.DateTimeFormat("en-US", {
                                                     day: "2-digit",
                                                     month: "short",
                                                 }).format(new Date(trade.openDate))}
                                             </span>
                                             <span className="text-zinc-300">→</span>
                                             <span>
-                                                {new Intl.DateTimeFormat("en-GB", {
+                                                {new Intl.DateTimeFormat("en-US", {
                                                     day: "2-digit",
                                                     month: "short",
                                                 }).format(new Date(trade.closeDate))}
                                             </span>
                                         </div>
                                         {holdDuration && (
-                                            <span className="text-[10px] font-mono font-semibold text-zinc-500 mt-0.5 bg-zinc-100 px-1.5 py-0.2 rounded">
+                                            <span className="text-xs font-mono text-zinc-500 mt-0.5">
                                                 {holdDuration}
                                             </span>
                                         )}
                                     </div>
 
-                                    {/* Entry → Exit Price */}
-                                    <div className="col-span-2 hidden md:flex items-center justify-center gap-1 text-sm font-mono tabular-nums text-zinc-700">
+                                    <div className="col-span-3 hidden xl:flex items-center justify-center gap-1 text-[13px] font-mono tabular-nums text-zinc-700">
                                         <span>${formatPrice(trade.entryPrice || "")}</span>
                                         <span className="text-zinc-300">→</span>
                                         {hasPartials ? (
                                             <span className="flex items-center gap-1">
                                                 ${formatPrice(avgSellPrice)}
-                                                <span className="text-[9px] px-1 rounded bg-amber-100 text-amber-800 font-mono font-semibold uppercase shrink-0">avg</span>
+                                                <span className="text-xs text-zinc-500">avg</span>
                                             </span>
                                         ) : (
                                             <span>${formatPrice(trade.sellPrice || "")}</span>
                                         )}
                                     </div>
 
-                                    {/* Quantity */}
-                                    <div className="col-span-1 hidden md:block text-center text-sm font-mono tabular-nums text-zinc-600">
+                                    <div className="col-span-2 hidden xl:block text-right pr-3 text-[13px] font-mono tabular-nums text-zinc-600">
                                         {formatQty(totalQty)}
                                     </div>
 
-                                    {/* Result & P&L % */}
-                                    <div className="col-span-4 md:col-span-2 text-center text-sm font-mono tabular-nums">
-                                        <div className="flex flex-col items-center justify-center">
-                                            <div className="flex items-center gap-1 font-bold">
-                                                {totalResult >= 0 ? (
-                                                    <FaArrowTrendUp className="text-emerald-600 text-xs" />
-                                                ) : (
-                                                    <FaArrowTrendDown className="text-rose-600 text-xs" />
-                                                )}
-                                                <span className={totalResult >= 0 ? "text-emerald-600" : "text-rose-600"}>
-                                                    {totalResult >= 0 ? "+" : ""}
-                                                    ${formatCurrency(totalResult)}
-                                                </span>
-                                            </div>
+                                    <div className="col-span-6 xl:col-span-3 text-right pr-3 text-[13px] font-mono tabular-nums">
+                                        <div className="flex flex-col items-end justify-center">
+                                            <span className={`font-semibold ${totalResult >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                                                {formatCurrency(totalResult, true)}
+                                            </span>
                                             {tradeROIPercent !== null && (
-                                                <span className={`text-[11px] font-semibold px-1.5 py-0.2 rounded mt-0.5 ${
+                                                <span className={`text-xs font-medium mt-0.5 ${
                                                     totalResult >= 0 
-                                                        ? "text-emerald-700 bg-emerald-50 border border-emerald-200/60" 
-                                                        : "text-rose-700 bg-rose-50 border border-rose-200/60"
+                                                        ? "text-emerald-700"
+                                                        : "text-rose-700"
                                                 }`}>
                                                     {tradeROIPercent >= 0 ? "+" : ""}{tradeROIPercent.toFixed(2)}%
                                                 </span>
@@ -369,10 +357,9 @@ export const CloseTradesTable = ({
                                         </div>
                                     </div>
 
-                                    {/* Rating */}
-                                    <div className="col-span-1 hidden md:flex justify-center items-center">
+                                    <div className="col-span-2 hidden xl:flex justify-center items-center">
                                         {trade.rating && trade.rating > 0 ? (
-                                            <div className="flex items-center gap-1 bg-amber-50 border border-amber-200/60 px-1.5 py-0.5 rounded text-xs font-mono tabular-nums">
+                                            <div className="flex items-center gap-1 text-xs font-mono tabular-nums">
                                                 <MdStar className="text-amber-500 text-sm" />
                                                 <span className="font-semibold text-zinc-700">{trade.rating}</span>
                                             </div>
@@ -381,14 +368,14 @@ export const CloseTradesTable = ({
                                         )}
                                     </div>
 
-                                    {/* Actions */}
-                                    <div className="col-span-3 md:col-span-1 flex items-center justify-end gap-1 shrink-0 pl-2" onClick={(e) => e.stopPropagation()}>
+                                    <div className="col-span-5 xl:col-span-3 flex items-center justify-end gap-0.5 shrink-0">
                                         {/* Strategy */}
                                         {trade.strategyId && (
                                             <button
+                                                type="button"
                                                 onClick={() => handleStrategyClick(trade)}
-                                                className="hidden md:block p-1.5 rounded hover:bg-zinc-100 transition-colors shrink-0"
-                                                title="Strategy Rules"
+                                                className="hidden xl:block p-1.5 rounded hover:bg-zinc-100 transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+                                                aria-label={`View strategy rules for ${trade.symbolName}`}
                                             >
                                                 <FollowedStrategyPie
                                                     percentage={handleCountPercentage(trade)}
@@ -404,12 +391,13 @@ export const CloseTradesTable = ({
                                                         initialTab="notes"
                                                         trigger={
                                                             <button
+                                                                type="button"
+                                                                aria-label={`Edit notes for ${trade.symbolName}`}
                                                                 className={`p-1.5 rounded transition-colors relative ${
                                                                     trade.notes && parseTradeNotes(trade.notes, trade.openDate, trade.id).length > 0
                                                                         ? "text-orange-600 bg-orange-50 hover:bg-orange-100 hover:text-orange-700"
                                                                         : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100"
                                                                 }`}
-                                                                title="Trade Notes"
                                                             >
                                                                 <BookOpen className="w-4 h-4" />
                                                                 {trade.notes && parseTradeNotes(trade.notes, trade.openDate, trade.id).length > 0 && (
@@ -428,10 +416,10 @@ export const CloseTradesTable = ({
                                                             {parseTradeNotes(trade.notes, trade.openDate, trade.id).map((note) => (
                                                                 <div key={note.id} className="text-xs border-b border-zinc-100 pb-1.5 last:border-0 last:pb-0">
                                                                     <div className="flex justify-between items-center mb-0.5">
-                                                                        <span className="font-semibold text-zinc-700 capitalize text-[10px]">
+                                                                        <span className="font-semibold text-zinc-700 capitalize text-xs">
                                                                             {note.category || 'general'}
                                                                         </span>
-                                                                        <span className="text-[9px] text-zinc-400 font-mono">
+                                                                        <span className="text-xs text-zinc-500 font-mono">
                                                                             {dayjs(note.createdAt).format("DD MMM YYYY")}
                                                                         </span>
                                                                     </div>
@@ -448,8 +436,8 @@ export const CloseTradesTable = ({
                                         {((trade.openOtherDetails && Object.keys(trade.openOtherDetails).length > 0) ||
                                           (trade.closeOtherDetails && Object.keys(trade.closeOtherDetails).length > 0)) && (
                                             <HoverCard>
-                                                <HoverCardTrigger className="p-1.5 rounded hover:bg-zinc-100 transition-colors">
-                                                    <svg className="w-4 h-4 text-zinc-400 hover:text-zinc-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <HoverCardTrigger className="p-1.5 rounded hover:bg-zinc-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400" aria-label="View custom trade fields">
+                                                    <svg className="w-4 h-4 text-zinc-400 hover:text-zinc-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                                                         <rect x="3" y="3" width="18" height="18" rx="2" />
                                                         <line x1="9" y1="9" x2="15" y2="9" />
                                                         <line x1="9" y1="13" x2="15" y2="13" />
@@ -494,7 +482,7 @@ export const CloseTradesTable = ({
                                             existingTrade={trade}
                                             initialTab="close-details"
                                             trigger={
-                                                <button className="p-1.5 rounded hover:bg-zinc-100 transition-colors" title="Edit Trade">
+                                                <button type="button" className="p-1.5 rounded hover:bg-zinc-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400" aria-label={`Edit ${trade.symbolName} trade`}>
                                                     <Pencil className="w-4 h-4 text-zinc-400 hover:text-zinc-600" />
                                                 </button>
                                             }
@@ -502,23 +490,23 @@ export const CloseTradesTable = ({
 
                                         {/* Delete */}
                                         <button
+                                            type="button"
                                             onClick={() => {
                                                 setTradeToDelete(trade);
                                                 setDeleteDialogOpen(true);
                                             }}
-                                            className="p-1.5 rounded hover:bg-rose-50 transition-colors"
-                                            title="Delete Trade"
+                                            className="p-1.5 rounded hover:bg-rose-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                                            aria-label={`Delete ${trade.symbolName} trade`}
                                         >
                                             <Trash2 className="w-4 h-4 text-zinc-400 hover:text-rose-500" />
                                         </button>
                                     </div>
                                 </div>
 
-                                {/* Expanded Position History Section */}
                                 {hasPartials && isExpanded && (
-                                    <div className="bg-zinc-50/90 border-t border-zinc-100 px-4 py-3">
-                                        <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">
-                                            Position History ({allCloseEvents.length} {allCloseEvents.length === 1 ? 'event' : 'events'})
+                                    <div className="bg-zinc-50 border-t border-zinc-100 px-3 py-3">
+                                        <h4 className="text-xs font-medium text-zinc-500 mb-2">
+                                            Execution history · {allCloseEvents.length} {allCloseEvents.length === 1 ? 'event' : 'events'}
                                         </h4>
                                         <div className="space-y-1.5">
                                             {(() => {
@@ -545,59 +533,47 @@ export const CloseTradesTable = ({
                                                     return (
                                                         <div 
                                                             key={event.id || index}
-                                                            className="grid grid-cols-12 gap-2 py-2 text-xs font-mono tabular-nums bg-white rounded-lg px-3 border border-zinc-200/70 items-center"
+                                                            className="grid grid-cols-12 gap-2 py-2 text-xs font-mono tabular-nums bg-white rounded-md px-3 border border-zinc-200 items-center"
                                                         >
-                                                            {/* Date & Time */}
                                                             <div className="col-span-3 flex items-center gap-1.5 text-zinc-600 font-sans">
-                                                                {new Intl.DateTimeFormat("en-GB", {
+                                                                {new Intl.DateTimeFormat("en-US", {
                                                                     day: "2-digit",
                                                                     month: "short",
                                                                 }).format(new Date(event.date))}
-                                                                <span className="text-[11px] text-zinc-400 font-mono">{event.time}</span>
+                                                                <span className="text-xs text-zinc-500 font-mono">{event.time}</span>
                                                                 {('isFinal' in event && event.isFinal) && (
-                                                                    <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold">
+                                                                    <span className="text-xs text-emerald-700 font-medium">
                                                                         Final
                                                                     </span>
                                                                 )}
                                                             </div>
 
-                                                            {/* Price */}
                                                             <div className="col-span-3 text-zinc-700">
                                                                 <span className="text-zinc-400">@ </span>
                                                                 ${formatPrice(displayPrice)}
                                                             </div>
 
-                                                            {/* Qty Change */}
                                                             <div className="col-span-3 font-sans">
                                                                 {isScaleIn ? (
-                                                                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200/50">
+                                                                    <span className="text-xs font-medium text-emerald-700">
                                                                         +{formatQty(qChange)} (Add)
                                                                     </span>
                                                                 ) : (
-                                                                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200/50">
+                                                                    <span className="text-xs font-medium text-amber-700">
                                                                         {formatQty(qChange)} (Reduce)
                                                                     </span>
                                                                 )}
                                                             </div>
 
-                                                            {/* Result or Avg Price */}
                                                             <div className="col-span-3 flex items-center gap-1 justify-end font-semibold">
                                                                 {isScaleIn ? (
                                                                     <span className="text-xs text-zinc-500 font-medium">
                                                                         Avg: ${formatPrice(runningPrice)}
                                                                     </span>
                                                                 ) : event.result !== undefined && event.result !== 0 ? (
-                                                                    <>
-                                                                        {event.result >= 0 ? (
-                                                                            <FaArrowTrendUp className="text-buy text-xs" />
-                                                                        ) : (
-                                                                            <FaArrowTrendDown className="text-sell text-xs" />
-                                                                        )}
-                                                                        <span className={event.result >= 0 ? "text-buy" : "text-sell"}>
-                                                                            {event.result >= 0 ? "+" : ""}
-                                                                            ${formatCurrency(event.result)}
-                                                                        </span>
-                                                                    </>
+                                                                    <span className={event.result >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                                                                        {formatCurrency(event.result, true)}
+                                                                    </span>
                                                                 ) : (
                                                                     <span className="text-zinc-300">—</span>
                                                                 )}
@@ -617,10 +593,10 @@ export const CloseTradesTable = ({
 
             {/* Strategy Rules Dialog */}
             <Dialog open={strategyDialogOpen} onOpenChange={setStrategyDialogOpen}>
-                <DialogContent className="max-w-xl max-h-[80vh] overflow-y-auto">
+                <DialogContent className="max-w-xl">
                     <DialogHeader>
                         <DialogTitle>
-                            Applied Strategy Rules -{" "}
+                            Applied Strategy Rules ·{" "}
                             {selectedTrade &&
                                 localStrategies.find(
                                     (s) => s.id === selectedTrade.strategyId
@@ -640,8 +616,6 @@ export const CloseTradesTable = ({
                             checkedCloseRules={
                                 selectedTrade.appliedCloseRules?.map((rule) => rule.id) || []
                             }
-                            onOpenRuleToggle={() => {}}
-                            onCloseRuleToggle={() => {}}
                         />
                     )}
                 </DialogContent>
@@ -650,17 +624,19 @@ export const CloseTradesTable = ({
             {/* Delete Trade Confirmation Dialog */}
             <DeleteTradeDialog
                 isOpen={deleteDialogOpen}
-                onOpenChange={setDeleteDialogOpen}
+                onOpenChange={(open) => {
+                    setDeleteDialogOpen(open);
+                    if (!open) setTradeToDelete(null);
+                }}
                 symbolName={tradeToDelete?.symbolName}
                 message={`Are you sure you want to delete "${tradeToDelete?.symbolName || ""}" (${tradeToDelete?.quantity || 0} shares)?`}
                 onConfirm={async () => {
-                    if (!tradeToDelete) return;
-                    await handleDeleteTradeRecord(
+                    if (!tradeToDelete) return false;
+                    return handleDeleteTradeRecord(
                         tradeToDelete.id,
                         tradeToDelete.result || "0",
                         tradeToDelete.closeDate || ""
                     );
-                    setTradeToDelete(null);
                 }}
             />
         </div>

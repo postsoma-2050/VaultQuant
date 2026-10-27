@@ -1,7 +1,7 @@
 import { JournalEditor } from "@/components/journal/JournalEditor";
+import { isValidJournalDate } from "@/components/journal/journalDate";
 import { getJournalEntry } from "@/server/actions/journal";
 import { notFound } from "next/navigation";
-import dayjs from "dayjs";
 
 interface PageProps {
     params: Promise<{
@@ -17,10 +17,9 @@ export default async function JournalEntryPage({ params }: PageProps) {
         notFound();
     }
 
-    const [year, month, day] = slug;
-    const dateStr = `${year}-${month}-${day}`;
+    const dateStr = slug.join("-");
 
-    if (!dayjs(dateStr).isValid()) {
+    if (!isValidJournalDate(dateStr)) {
         notFound();
     }
 
@@ -28,6 +27,7 @@ export default async function JournalEntryPage({ params }: PageProps) {
 
     return (
         <JournalEditor
+            key={dateStr}
             date={dateStr}
             initialContent={entry?.content as Record<string, unknown> | undefined}
             hasExistingEntry={!!entry}

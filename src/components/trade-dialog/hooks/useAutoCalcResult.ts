@@ -21,7 +21,7 @@ export function toNum(value?: unknown): number | undefined {
     return undefined;
 }
 
-export function useAutoCalcResult(form: UseFormReturn<FormType>) {
+export function useAutoCalcResult(form: UseFormReturn<FormType>, enabled = true) {
     const { watch, setValue, getValues } = form;
 
     const entryPrice = watch("entryPrice");
@@ -47,7 +47,7 @@ export function useAutoCalcResult(form: UseFormReturn<FormType>) {
         }
 
         // If user has manually modified the result, don't auto-calculate
-        if (userModifiedResultRef.current) {
+        if (!enabled || userModifiedResultRef.current) {
             return;
         }
 
@@ -87,7 +87,7 @@ export function useAutoCalcResult(form: UseFormReturn<FormType>) {
                 clearTimeout(debounceRef.current);
             }
         };
-    }, [entryPrice, sellPrice, quantitySold, quantity, positionType, setValue, getValues]);
+    }, [enabled, entryPrice, sellPrice, quantitySold, quantity, positionType, setValue, getValues]);
 
     return {
         setUserModifiedResult: () => {

@@ -1,24 +1,24 @@
-import { BarChart, PieChart } from "@mui/x-charts";
-import { Box, useMediaQuery } from "@mui/material";
-import { createTheme, ThemeProvider } from "@mui/material/styles";
-import { daysOfTheWeek } from "@/data/data";
+"use client";
 
-const theme = createTheme({
-    typography: {
-        body1: {
-            fontSize: ".75rem",
-        },
-        body2: {
-            fontSize: ".75rem",
-        },
-    },
-});
+import { useMemo } from "react";
+import {
+    PieChart,
+    Pie,
+    Cell,
+    BarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    ResponsiveContainer,
+} from "recharts";
+import { PieChart as PieIcon, TrendingUp, CalendarDays } from "lucide-react";
 
-export function StatsGridPageTwo({
-    oterData,
-}: {
+interface StatsGridPageTwoProps {
     start?: string | undefined;
     end?: string | undefined;
+    closedTradeCount?: number;
     oterData: {
         chartTwo: {
             topTrades: {
@@ -37,220 +37,333 @@ export function StatsGridPageTwo({
             label: string;
         }[];
     };
-}) {
-    console.log("StatsGridPageTwo oterData:", JSON.stringify(oterData, null, 2));
-    const isMobile = useMediaQuery("(max-width:768px)");
+}
+
+const INSTRUMENT_COLORS = [
+    "#52525b", // Zinc
+    "#10b981", // Emerald
+    "#f59e0b", // Amber
+    "#a1a1aa", // Light zinc
+];
+
+function formatSignedCurrency(value: number) {
+    return `${value >= 0 ? "+" : "-"}$${Math.abs(value).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })}`;
+}
+
+function formatAxisCurrency(value: number) {
+    return `${value < 0 ? "-" : ""}$${Math.abs(value).toLocaleString()}`;
+}
+
+export function StatsGridPageTwo({
+    start,
+    end,
+    closedTradeCount,
+    oterData,
+}: StatsGridPageTwoProps) {
+    const hasAccountRange =
+        start !== undefined &&
+        end !== undefined &&
+        Number.isFinite(Number(start)) &&
+        Number.isFinite(Number(end));
+    const accountChange = hasAccountRange ? Number(end) - Number(start) : undefined;
+
+    // 1. Prepare Donut Chart Data
+    const donutData = useMemo(() => {
+        const trades = oterData.chartTwo?.topTrades ?? [];
+        const total = trades.reduce((sum, item) => sum + (item.value || 0), 0);
+        return trades
+            .filter((item) => (item.value || 0) > 0)
+            .map((item, index) => ({
+                name: item.label,
+                value: item.value || 0,
+                percent: total > 0 ? ((item.value / total) * 100).toFixed(1) : "0",
+                color: INSTRUMENT_COLORS[index % INSTRUMENT_COLORS.length],
+            }));
+    }, [oterData.chartTwo]);
+
+    // 2. Prepare the ten largest closed-trade results by absolute P&L.
+    const topTradesData = useMemo(() => {
+        const results = oterData.chartThree?.results ?? [];
+        const dates = oterData.chartThree?.dates ?? [];
+        return results
+            .map((result, idx) => ({
+                date: dates[idx] || `Trade #${idx + 1}`,
+                pnl: result,
+            }))
+            .sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl))
+            .slice(0, 10);
+    }, [oterData.chartThree]);
+
+    // 3. Prepare trade counts by day of week.
+    const weekdayData = useMemo(() => {
+        const series = oterData.chartFour ?? [];
+        const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+        return dayLabels.map((day, dayIdx) => {
+            const entry: Record<string, string | number> = { day };
+            series.forEach((s) => {
+                const mondayFirstIndex = dayIdx === 0 ? 6 : dayIdx - 1;
+                entry[s.label] = s.data?.[mondayFirstIndex] ?? 0;
+            });
+            return entry;
+        });
+    }, [oterData.chartFour]);
+
+    const weekdaySeries = oterData.chartFour ?? [];
+
     return (
-        <ThemeProvider theme={theme}>
-            <div className="grid grid-rows-3 md:grid-rows-2 grid-cols-1 md:grid-cols-12 gap-4 max-md:py-4 md:p-4 md:h-[78vh] 2xl:h-[80vh] bg-transparent w-full">
-                {/* 1. Instruments Popularity */}
-                <div className="max-md:h-[350px] col-span-1 md:col-span-4 row-span-1 bg-white rounded-lg border border-gray-200 flex flex-col items-center justify-start shadow-md">
-                    <div className="font-semibold border-[0.5px] border-gray-200 w-full p-2">
-                        <p>Your Most Popular Trading Instruments:</p>
+        <div className="flex min-w-0 flex-col gap-4 w-full">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 text-xs text-zinc-500">
+                <span>
+                    Scope <span className="font-medium text-zinc-800">Current trade filter</span>
+                </span>
+                {accountChange !== undefined && (
+                    <span>
+                        Account change{" "}
+                        <span className={`font-mono font-semibold tabular-nums ${accountChange >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                            {formatSignedCurrency(accountChange)}
+                        </span>
+                    </span>
+                )}
+                <span>
+                    Closed trades{" "}
+                    <span className="font-mono font-semibold text-zinc-800 tabular-nums">
+                        {closedTradeCount ?? oterData.chartThree?.results.length ?? 0}
+                    </span>
+                </span>
+            </div>
+
+            <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-12 xl:grid-rows-[minmax(0,1fr)_minmax(0,1fr)]">
+            {/* 1. Instruments Popularity Donut */}
+            <div className="flex min-h-[360px] min-w-0 flex-col overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-xs xl:col-span-4 xl:row-span-1 xl:min-h-0">
+                <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-zinc-100 bg-zinc-50/50">
+                    <div className="flex items-center gap-2">
+                        <PieIcon className="w-4 h-4 text-zinc-500" />
+                        <h3 className="text-sm font-semibold text-zinc-800">
+                            Most traded instruments
+                        </h3>
                     </div>
-                    <div className="flex gap-6 p-2">
-                        <div className="flex gap-2 items-center">
-                            <div className="w-[12px] h-[12px] bg-customBlue rounded-sm" />
-                            <p>
-                                {oterData.chartTwo.topTrades[0]?.label ??
-                                    "No data"}{" "}
-                                <span className="text-gray-400 text-[0.7rem]">
-                                    {oterData.chartTwo.topTrades[0]?.value ?? 0}
-                                </span>
-                            </p>
-                        </div>
-                        <div className="flex gap-2 items-center">
-                            <div className="w-[12px] h-[12px] bg-customYellow rounded-sm" />
-                            <p>
-                                {oterData.chartTwo.topTrades[1]?.label ??
-                                    "No data"}{" "}
-                                <span className="text-gray-400 text-[0.7rem]">
-                                    {oterData.chartTwo.topTrades[1]?.value ?? 0}
-                                </span>
-                            </p>
-                        </div>
-                        <div className="flex gap-2 items-center">
-                            <div className="w-[12px] h-[12px] bg-customOrange rounded-sm" />
-                            <p>
-                                {oterData.chartTwo.topTrades[2]?.label ??
-                                    "No data"}{" "}
-                                <span className="text-gray-400 text-[0.7rem]">
-                                    {oterData.chartTwo.topTrades[2]?.value ?? 0}
-                                </span>
-                            </p>
-                        </div>
-                    </div>
-                    <Box
-                        sx={{
-                            width: "100%",
-                            height: "100%",
-                            position: "relative",
-                            "&::after": isMobile
-                                ? {
-                                      content: '""',
-                                      position: "absolute",
-                                      top: 0,
-                                      left: 0,
-                                      right: 0,
-                                      bottom: 0,
-                                      zIndex: 10,
-                                      pointerEvents: "auto",
-                                      cursor: "default",
-                                  }
-                                : {},
-                        }}>
-                        <PieChart
-                            colors={[
-                                "#9999ff",
-                                "#fac666",
-                                "#e16540",
-                                "#E3E0DE",
-                            ]}
-                            series={[
-                                {
-                                    data: oterData.chartTwo.topTrades ?? [],
-                                    innerRadius: 80,
-                                    paddingAngle: 2,
-                                    cornerRadius: 5,
-                                    highlightScope: {
-                                        fade: "global",
-                                        highlight: "item",
-                                    },
-                                },
-                            ]}
-                            margin={{
-                                top: 25,
-                                bottom: 25,
-                                left: 25,
-                                right: 25,
-                            }}
-                            slotProps={{
-                                popper: {
-                                    sx: {
-                                        fontSize: "0.75rem",
-                                    },
-                                },
-                                legend: {
-                                    hidden: true,
-                                },
-                            }}
-                        />
-                    </Box>
+                    <span className="text-[11px] text-zinc-500">
+                        Share of trade count
+                    </span>
                 </div>
 
-                {/* 2. Top Profitable Trades */}
-                <div className="max-md:h-[350px] col-span-1 md:col-span-8 row-span-1 bg-white rounded-lg border border-gray-200 flex flex-col items-center justify-start relative shadow-md">
-                    <div className="font-semibold border-[0.5px] border-gray-200 w-full p-2">
-                        <p>Top Profitable Trades</p>
+                <div className="flex min-h-0 flex-1 flex-col p-4">
+                    {/* Legend */}
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                        {donutData.map((item) => (
+                            <div
+                                key={item.name}
+                                className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-zinc-100 bg-zinc-50 p-2"
+                            >
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <span
+                                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                                        style={{ backgroundColor: item.color }}
+                                    />
+                                    <span className="truncate text-xs font-medium text-zinc-700">
+                                        {item.name}
+                                    </span>
+                                </div>
+                                <span className="shrink-0 font-mono text-xs font-semibold tabular-nums text-zinc-500">
+                                    {item.value} <span className="text-[10px] font-normal text-zinc-400">({item.percent}%)</span>
+                                </span>
+                            </div>
+                        ))}
                     </div>
-                    <Box
-                        sx={{
-                            width: "100%",
-                            height: "100%",
-                            position: "relative",
-                            "&::after": isMobile
-                                ? {
-                                      content: '""',
-                                      position: "absolute",
-                                      top: 0,
-                                      left: 0,
-                                      right: 0,
-                                      bottom: 0,
-                                      zIndex: 10,
-                                      pointerEvents: "auto",
-                                      cursor: "default",
-                                  }
-                                : {},
-                        }}>
-                        <BarChart
-                            xAxis={[
-                                {
-                                    scaleType: "band",
-                                    data: oterData.chartThree.dates ?? [],
-                                },
-                            ]}
-                            borderRadius={5}
-                            series={[
-                                {
-                                    data: oterData.chartThree.results ?? [],
-                                    color: "#76b562",
-                                    label: "Earned on This Day",
-                                    valueFormatter: (value) => `${value} $`,
-                                },
-                            ]}
-                            slotProps={{ legend: { hidden: true } }}
-                        />
-                    </Box>
-                </div>
 
-                {/* 3. Trading Volume by Day of the Week */}
-                <div className="max-md:h-[350px] col-span-1 md:col-span-12 row-span-1 bg-white rounded-lg border border-gray-200 flex flex-col items-center justify-start shadow-md">
-                    <div className="font-semibold border-[0.5px] border-gray-200 w-full p-2">
-                        <p>Trading Volume by Day of the Week:</p>
+                    {/* Donut Chart Container */}
+                    <div className="relative min-h-[190px] flex-1 w-full min-w-0">
+                        {donutData.length === 0 ? (
+                            <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-zinc-200 text-xs text-zinc-500">
+                                No trades in this scope
+                            </div>
+                        ) : (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={donutData}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius="48%"
+                                        outerRadius="72%"
+                                        paddingAngle={3}
+                                        dataKey="value"
+                                    >
+                                        {donutData.map((entry, index) => (
+                                            <Cell
+                                                key={`cell-${index}`}
+                                                fill={entry.color}
+                                                stroke="#ffffff"
+                                                strokeWidth={2}
+                                            />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip
+                                        formatter={(value: string | number, name: string) => [
+                                            `${value} trades`,
+                                            name,
+                                        ]}
+                                        contentStyle={{
+                                            backgroundColor: "#18181b",
+                                            borderRadius: "8px",
+                                            border: "none",
+                                            color: "#ffffff",
+                                            fontSize: "12px",
+                                            padding: "8px 12px",
+                                        }}
+                                        itemStyle={{ color: "#ffffff" }}
+                                    />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        )}
                     </div>
-                    <div className="flex gap-6 p-2">
-                        <div className="flex gap-2 items-center">
-                            <div className="w-[12px] h-[12px] bg-customBlue rounded-sm" />
-                            <p>
-                                {oterData.chartFour.length !== 0
-                                    ? oterData.chartFour[0]?.label ?? "No data"
-                                    : "No data"}
-                            </p>
-                        </div>
-                        <div className="flex gap-2 items-center">
-                            <div className="w-[12px] h-[12px] bg-customYellow rounded-sm" />
-                            <p>
-                                {oterData.chartFour.length !== 0
-                                    ? oterData.chartFour[1]?.label ?? "No data"
-                                    : "No data"}
-                            </p>
-                        </div>
-                        <div className="flex gap-2 items-center">
-                            <div className="w-[12px] h-[12px] bg-customOrange rounded-sm" />
-                            <p>
-                                {oterData.chartFour.length !== 0
-                                    ? oterData.chartFour[2]?.label ?? "No data"
-                                    : "No data"}
-                            </p>
-                        </div>
-                    </div>
-                    <Box
-                        sx={{
-                            width: "100%",
-                            height: "100%",
-                            position: "relative",
-                            "&::after": isMobile
-                                ? {
-                                      content: '""',
-                                      position: "absolute",
-                                      top: 0,
-                                      left: 0,
-                                      right: 0,
-                                      bottom: 0,
-                                      zIndex: 10,
-                                      pointerEvents: "auto",
-                                      cursor: "default",
-                                  }
-                                : {},
-                        }}>
-                        <BarChart
-                            xAxis={[
-                                {
-                                    scaleType: "band",
-                                    data: daysOfTheWeek,
-                                },
-                            ]}
-                            borderRadius={5}
-                            series={oterData.chartFour ?? []}
-                            slotProps={{
-                                legend: {
-                                    hidden: true,
-                                },
-                            }}
-                        />
-                    </Box>
                 </div>
             </div>
-        </ThemeProvider>
+
+            {/* 2. Largest closed-trade P&L results */}
+            <div className="flex min-h-[360px] min-w-0 flex-col overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-xs xl:col-span-8 xl:row-span-1 xl:min-h-0">
+                <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-zinc-100 bg-zinc-50/50">
+                    <div className="flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-emerald-600" />
+                        <h3 className="text-sm font-semibold text-zinc-800">
+                            Largest P&amp;L results (top 10)
+                        </h3>
+                    </div>
+                    <span className="text-[11px] text-zinc-500">
+                        Realized P&amp;L
+                    </span>
+                </div>
+
+                <div className="min-h-[240px] flex-1 w-full min-w-0 p-4">
+                    {topTradesData.length === 0 ? (
+                        <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-zinc-200 text-xs text-zinc-500">
+                            No closed trades in this scope
+                        </div>
+                    ) : (
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={topTradesData} margin={{ top: 10, right: 10, left: 4, bottom: 20 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" vertical={false} />
+                                <XAxis
+                                    dataKey="date"
+                                    tickLine={false}
+                                    axisLine={{ stroke: "#e4e4e7" }}
+                                    tick={{ fill: "#71717a", fontSize: 11, fontFamily: "monospace" }}
+                                />
+                                <YAxis
+                                    tickLine={false}
+                                    axisLine={{ stroke: "#e4e4e7" }}
+                                    tick={{ fill: "#71717a", fontSize: 11, fontFamily: "monospace" }}
+                                    tickFormatter={formatAxisCurrency}
+                                />
+                                <Tooltip
+                                    formatter={(val: string | number) => [
+                                        formatSignedCurrency(Number(val)),
+                                        "Realized P&L",
+                                    ]}
+                                    labelFormatter={(label) => `Closed: ${label}`}
+                                    contentStyle={{
+                                        backgroundColor: "#18181b",
+                                        borderRadius: "8px",
+                                        border: "none",
+                                        color: "#ffffff",
+                                        fontSize: "12px",
+                                        padding: "8px 12px",
+                                    }}
+                                />
+                                <Bar
+                                    dataKey="pnl"
+                                    radius={[4, 4, 0, 0]}
+                                    maxBarSize={48}
+                                >
+                                    {topTradesData.map((trade, index) => (
+                                        <Cell
+                                            key={`${trade.date}-${index}`}
+                                            fill={trade.pnl >= 0 ? "#10b981" : "#f43f5e"}
+                                        />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    )}
+                </div>
+            </div>
+
+            {/* 3. Closed trade count by day of week */}
+            <div className="flex min-h-[340px] min-w-0 flex-col overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-xs xl:col-span-12 xl:row-span-1 xl:min-h-0">
+                <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-zinc-100 bg-zinc-50/50">
+                    <div className="flex items-center gap-2">
+                        <CalendarDays className="w-4 h-4 text-zinc-500" />
+                        <h3 className="text-sm font-semibold text-zinc-800">
+                            Closed trades by weekday
+                        </h3>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        {weekdaySeries.map((s, idx) => (
+                            <div key={s.label} className="flex items-center gap-1.5">
+                                <span
+                                    className="w-2.5 h-2.5 rounded-full"
+                                    style={{
+                                        backgroundColor:
+                                            INSTRUMENT_COLORS[idx % INSTRUMENT_COLORS.length],
+                                    }}
+                                />
+                                <span className="text-[11px] font-medium text-zinc-600">
+                                    {s.label}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="min-h-[220px] flex-1 w-full min-w-0 p-4">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={weekdayData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" vertical={false} />
+                            <XAxis
+                                dataKey="day"
+                                tickLine={false}
+                                axisLine={{ stroke: "#e4e4e7" }}
+                                tick={{ fill: "#71717a", fontSize: 12, fontWeight: 500 }}
+                            />
+                            <YAxis
+                                tickLine={false}
+                                axisLine={{ stroke: "#e4e4e7" }}
+                                tick={{ fill: "#71717a", fontSize: 11, fontFamily: "monospace" }}
+                                allowDecimals={false}
+                            />
+                            <Tooltip
+                                formatter={(value: string | number, name: string) => [
+                                    `${value} closed ${Number(value) === 1 ? "trade" : "trades"}`,
+                                    name,
+                                ]}
+                                contentStyle={{
+                                    backgroundColor: "#18181b",
+                                    borderRadius: "8px",
+                                    border: "none",
+                                    color: "#ffffff",
+                                    fontSize: "12px",
+                                    padding: "8px 12px",
+                                }}
+                            />
+                            {weekdaySeries.map((s, idx) => (
+                                <Bar
+                                    key={s.label}
+                                    dataKey={s.label}
+                                    fill={INSTRUMENT_COLORS[idx % INSTRUMENT_COLORS.length]}
+                                    radius={[4, 4, 0, 0]}
+                                    maxBarSize={32}
+                                />
+                            ))}
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+            </div>
+        </div>
     );
 }

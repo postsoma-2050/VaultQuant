@@ -7,15 +7,16 @@ import Image from "next/image";
 import { Handshake, MessageCircle, Star } from "lucide-react";
 import { completeOnboarding } from "@/server/actions/user";
 import { redirect } from "next/navigation";
+import { VaultQuantLogo } from "@/components/icons";
 
 const STEPS = [
     {
-        title: "Welcome to TradeJournal",
+        title: "Welcome to VaultQuant",
         body: "A quick tour of our main features. Let's get started!",
     },
     {
         title: "Step 1: Calendar",
-        body: "See you trade history in a visual calendar.",
+        body: "See your trade history in a visual calendar.",
         image: "/intro/intro-calendar.svg",
     },
     {
@@ -45,12 +46,12 @@ const STEPS = [
     },
     {
         title: "Step 7: Get your AI report",
-        body: "Get your AI report and improve your trading. Currently it's paid, but we're working on a free version.",
+        body: "Trading records are stored locally. Optional AI analysis sends trading context to your configured local or remote model provider; live quotes also use an external market-data service.",
         video: "/intro/intro-ai-report.webm",
     },
     {
         title: "Support & Feedback",
-        body: "Give us feedback, for you its a few seconds, for us its a big help. Also give us a ⭐ on GitHub if you like the app. More stars - more features.",
+        body: "VaultQuant is an open-source desktop trading journal. Share feedback and feature requests through the project on GitHub.",
         last: true,
     },
 ];
@@ -73,6 +74,9 @@ export default function Page() {
 
     return (
         <div className="mx-auto flex h-full w-full flex-col p-12 absolute top-0 left-0 right-0 bottom-0 bg-white z-[9999]">
+            <div className="mb-5 flex shrink-0 items-center gap-2 font-semibold text-zinc-900">
+                <VaultQuantLogo size={24} />VaultQuant
+            </div>
             <main className="flex-1" aria-live="polite">
                 <h2 className="mb-2 text-xl font-medium">{STEPS[step].title}</h2>
                 <p className="text-tertiary text-sm">{STEPS[step].body}</p>
@@ -92,12 +96,14 @@ export default function Page() {
                     <div className="flex flex-col gap-2 p-8 border border-zinc-300 rounded-xl w-[300px] h-[240px]">
                         <MessageCircle size={24} />
                         <h1 className="text-2xl font-bold mb-2">Feedback</h1>
-                        <p className="text-sm text-zinc-500">Leave feedback on the Feedback page or open an issue on Github, every message is valuable and can spark real change.</p>
+                        <p className="text-sm text-zinc-500">Share a bug report or feature request in the project&apos;s GitHub issues.</p>
+                        <a href="https://github.com/postsoma-2050/VaultQuant/issues" target="_blank" rel="noreferrer" className="text-sm underline underline-offset-4">Open issues</a>
                     </div>
                     <div className="flex flex-col gap-2 p-8 border border-zinc-300 rounded-xl w-[300px] h-[240px]">
                         <Star size={24} />
                         <h1 className="text-2xl font-bold mb-2">GitHub</h1>
                         <p className="text-sm text-zinc-500">Give us a star on GitHub — more stars help us prioritize and build new features.</p>
+                        <a href="https://github.com/postsoma-2050/VaultQuant" target="_blank" rel="noreferrer" className="text-sm underline underline-offset-4">View repository</a>
                     </div>
                     <div className="flex flex-col gap-2 p-8 border border-zinc-300 rounded-xl w-[300px] h-[240px]">
                         <Handshake size={24} />

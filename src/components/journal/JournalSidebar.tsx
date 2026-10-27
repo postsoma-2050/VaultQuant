@@ -10,6 +10,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useJournalDraft } from "./JournalDraftContext";
+import { formatLocalDate, isValidJournalDate, toJournalPath } from "./journalDate";
 
 interface JournalSidebarProps {
     dates: string[] | { date: string; summary?: string }[];
@@ -24,6 +26,7 @@ type TreeStructure = {
 export function JournalSidebar({ dates }: JournalSidebarProps) {
     const pathname = usePathname();
     const router = useRouter();
+    const { confirmNavigation } = useJournalDraft();
     const [expandedYears, setExpandedYears] = useState<string[]>([]);
     const [expandedMonths, setExpandedMonths] = useState<string[]>([]);
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -31,12 +34,15 @@ export function JournalSidebar({ dates }: JournalSidebarProps) {
 
     // Normalize dates prop
     const entriesList = useMemo(() => {
-        return dates.map((d) => {
-            if (typeof d === "string") {
-                return { date: d, summary: "" };
-            }
-            return d;
-        });
+        return dates
+            .map((d) => {
+                if (typeof d === "string") {
+                    return { date: d, summary: "" };
+                }
+                return d;
+            })
+            .filter((entry) => isValidJournalDate(entry.date))
+            .sort((a, b) => b.date.localeCompare(a.date));
     }, [dates]);
 
     // Client-side search and filter
@@ -54,14 +60,12 @@ export function JournalSidebar({ dates }: JournalSidebarProps) {
     const tree = useMemo(() => {
         const t: TreeStructure = {};
         filteredEntries.forEach((entry) => {
-            const d = dayjs(entry.date);
-            const year = d.format("YYYY");
-            const month = d.format("MMM");
-            const day = entry.date;
+            const [year, monthNumber] = entry.date.split("-");
+            const month = dayjs(`${year}-${monthNumber}-01`).format("MMM");
 
             if (!t[year]) t[year] = {};
             if (!t[year][month]) t[year][month] = [];
-            t[year][month].push(day);
+            t[year][month].push(entry.date);
         });
         return t;
     }, [filteredEntries]);
@@ -83,11 +87,10 @@ export function JournalSidebar({ dates }: JournalSidebarProps) {
     useEffect(() => {
         const match = pathname.match(/^\/private\/journal\/(\d{4})\/(\d{2})\/(\d{2})$/);
         if (match) {
-            const formattedDatePath = pathname.replace("/private/journal/", "").replace(/\//g, "-");
-            const d = dayjs(formattedDatePath);
-            if (d.isValid()) {
-                const year = d.format("YYYY");
-                const month = d.format("MMM");
+            const date = `${match[1]}-${match[2]}-${match[3]}`;
+            if (isValidJournalDate(date)) {
+                const year = match[1];
+                const month = dayjs(`${year}-${match[2]}-01`).format("MMM");
                 const monthKey = `${year}-${month}`;
                 
                 setExpandedYears([year]);
@@ -113,21 +116,23 @@ export function JournalSidebar({ dates }: JournalSidebarProps) {
     };
 
     const handleDateSelect = (date: Date | undefined) => {
-        if (date) {
-            const formattedDate = dayjs(date).format("YYYY/MM/DD");
-            router.push(`/private/journal/${formattedDate}`);
-            setIsCalendarOpen(false);
-        }
+        if (!date || !confirmNavigation()) return;
+
+        const path = toJournalPath(formatLocalDate(date));
+        if (!path) return;
+
+        setIsCalendarOpen(false);
+        router.push(path);
     };
 
     return (
-        <div className="w-64 border-r h-full bg-zinc-50/50 flex flex-col">
-            <div className="flex-1 p-4 overflow-y-auto">
+        <div className="flex h-full w-60 min-w-0 shrink-0 flex-col border-r border-zinc-200 bg-zinc-50/50">
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
                 <div className="font-semibold text-sm text-zinc-500 mb-3 px-2">
                     Daily Journal Entries
                 </div>
                 <Link
-                    href={`/private/journal/${dayjs().format("YYYY/MM/DD")}`}
+                    href={toJournalPath(formatLocalDate()) ?? "/private/journal"}
                     className="flex items-center justify-center gap-2 w-full py-2 mb-3 text-xs font-semibold bg-zinc-900 text-white hover:bg-zinc-800 rounded-md transition-colors shadow-sm text-center"
                 >
                     <Plus className="w-3.5 h-3.5" />
@@ -186,11 +191,11 @@ export function JournalSidebar({ dates }: JournalSidebarProps) {
                                                             return (
                                                                 <Link
                                                                     key={date}
-                                                                    href={`/private/journal/${d.format("YYYY/MM/DD")}`}
+                                                                    href={toJournalPath(date) ?? "/private/journal"}
                                                                     className={cn(
-                                                                        "flex flex-col w-full px-2 py-1.5 text-sm rounded-md transition-colors gap-0.5",
+                                                                        "flex min-w-0 w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-sm transition-colors",
                                                                         isActive
-                                                                            ? "bg-orange-50 text-orange-600 font-medium"
+                                                                            ? "bg-zinc-200/80 text-zinc-900 font-medium"
                                                                             : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
                                                                     )}
                                                                 >
@@ -199,7 +204,7 @@ export function JournalSidebar({ dates }: JournalSidebarProps) {
                                                                         <span>{d.format("D MMM")}</span>
                                                                     </div>
                                                                     {summary && (
-                                                                        <span className="text-[10px] text-zinc-400 font-normal truncate pl-5 block max-w-full">
+                                                                        <span className="block max-w-full truncate pl-5 text-[11px] font-normal text-zinc-400">
                                                                             {summary}
                                                                         </span>
                                                                     )}
@@ -223,7 +228,7 @@ export function JournalSidebar({ dates }: JournalSidebarProps) {
                 </div>
             </div>
             
-            <div className="p-4 border-t border-zinc-200">
+            <div className="shrink-0 border-t border-zinc-200 p-3">
                 <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                     <PopoverTrigger asChild>
                         <Button

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useMemo } from "react";
 import {
     ComposedChart,
     Area,
@@ -44,31 +44,30 @@ interface GetOtherDataForGridPageOneResult {
     };
 }
 
+function formatSignedCurrency(value: number) {
+    return `${value >= 0 ? "+" : "-"}$${Math.abs(value).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })}`;
+}
+
+function formatAxisCurrency(value: number) {
+    const formatted = Math.abs(value).toLocaleString("en-US");
+    return `${value < 0 ? "-" : ""}$${formatted}`;
+}
+
 export function StatsGridPageOne({
     tradingData,
     otherData,
+    scopeLabel = "All time",
 }: {
     tradingData: { date: Date; capital: number; pnl?: number; symbolName?: string; sp500?: number }[];
     otherData: GetOtherDataForGridPageOneResult;
+    scopeLabel?: string;
 }) {
-    const [timeRange, setTimeRange] = useState<string>("ALL");
-
-    // Filter, process, and enrich time-series data with Drawdown metrics
+    // Enrich the already-scoped time-series data with drawdown metrics.
     const { chartPoints, maxDrawdownVal, maxDrawdownPct } = useMemo(() => {
         if (!tradingData || tradingData.length === 0) {
-            return { chartPoints: [], maxDrawdownVal: 0, maxDrawdownPct: 0 };
-        }
-
-        const now = new Date();
-        let cutoffDate = new Date(0); // ALL default
-
-        if (timeRange === "1M") cutoffDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
-        else if (timeRange === "3M") cutoffDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
-        else if (timeRange === "6M") cutoffDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
-        else if (timeRange === "YTD") cutoffDate = new Date(now.getFullYear(), 0, 1);
-
-        const filtered = tradingData.filter((d) => d.date >= cutoffDate);
-        if (filtered.length === 0) {
             return { chartPoints: [], maxDrawdownVal: 0, maxDrawdownPct: 0 };
         }
 
@@ -76,7 +75,7 @@ export function StatsGridPageOne({
         let maxDD = 0;
         let maxDDPct = 0;
 
-        const points = filtered.map((d, index) => {
+        const points = tradingData.map((d, index) => {
             const currentCap = d.capital;
             if (index === 0 || currentCap > peak) {
                 peak = currentCap;
@@ -108,7 +107,12 @@ export function StatsGridPageOne({
             maxDrawdownVal: maxDD,
             maxDrawdownPct: maxDDPct,
         };
-    }, [tradingData, timeRange]);
+    }, [tradingData]);
+
+    const periodPnl = useMemo(
+        () => chartPoints.reduce((sum, point) => sum + (point.pnl ?? 0), 0),
+        [chartPoints]
+    );
 
     // Format hold times
     const formatDuration = (hours: number) => {
@@ -124,7 +128,7 @@ export function StatsGridPageOne({
         return (
             <div className="flex flex-col gap-2">
                 <div className="flex justify-between items-baseline text-xs font-semibold">
-                    <span className="text-zinc-500 font-bold">{title}</span>
+                    <span className="text-zinc-500 font-semibold">{title}</span>
                     <span className="text-zinc-800 font-extrabold">{winRate}% <span className="text-[10px] text-zinc-400 font-normal">({total} trades)</span></span>
                 </div>
                 <div className="w-full flex h-2 rounded-full overflow-hidden bg-rose-500/10">
@@ -138,7 +142,7 @@ export function StatsGridPageOne({
     interface TooltipPayloadData {
         formattedDate: string;
         capital: number;
-        pnl: number;
+        pnl?: number;
         pnlPercent?: number;
         sp500?: number;
         sp500Capital?: number;
@@ -159,7 +163,8 @@ export function StatsGridPageOne({
     }) => {
         if (active && payload && payload.length) {
             const data = payload[0].payload;
-            const isPnlPositive = data.pnl >= 0;
+            const pnl = data.pnl ?? 0;
+            const isPnlPositive = pnl >= 0;
 
             return (
                 <div className="bg-white border border-zinc-200 p-4 rounded-xl shadow-lg text-xs flex flex-col gap-2 font-sans min-w-[180px]">
@@ -177,12 +182,14 @@ export function StatsGridPageOne({
                     <div className="flex items-center justify-between border-t border-zinc-100 pt-2">
                         <span className="text-zinc-500 font-medium">Trade P&L ({data.symbolName}):</span>
                         <span className={`font-extrabold ${isPnlPositive ? "text-emerald-600" : "text-rose-600"}`}>
-                            {isPnlPositive ? "+" : ""}${Math.round(data.pnl).toLocaleString()}
+                            {formatSignedCurrency(pnl)}
                         </span>
                     </div>
                     <div className="flex items-center justify-between">
                         <span className="text-zinc-500 font-medium">Drawdown:</span>
-                        <span className="font-bold text-rose-500">${Math.round(data.drawdown).toLocaleString()} ({data.drawdownPct})</span>
+                        <span className="font-bold text-rose-500">
+                            {formatSignedCurrency(data.drawdown)} ({data.drawdownPct})
+                        </span>
                     </div>
                 </div>
             );
@@ -191,44 +198,45 @@ export function StatsGridPageOne({
     };
 
     return (
-        <div className="flex flex-col gap-6 w-full mt-4">
+        <div className="flex min-w-0 flex-col gap-6 w-full mt-4">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 text-xs text-zinc-500">
+                <span>
+                    Scope <span className="font-medium text-zinc-800">{scopeLabel}</span>
+                </span>
+                <span>
+                    Realized P&amp;L{" "}
+                    <span className={`font-mono font-semibold tabular-nums ${periodPnl >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                        {formatSignedCurrency(periodPnl)}
+                    </span>
+                </span>
+                <span>
+                    Closed trades <span className="font-mono font-semibold text-zinc-800 tabular-nums">{otherData.chartOne.allPositions}</span>
+                </span>
+                <span>
+                    Win rate <span className="font-mono font-semibold text-zinc-800 tabular-nums">{otherData.chartOne.succesfullPositions}%</span>
+                </span>
+            </div>
+
             {/* Top row: Equity chart + Win rate */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 {/* Equity Curve Panel */}
-                <div className="lg:col-span-3 bg-white rounded-xl border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-6 flex flex-col gap-4">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="lg:col-span-3 min-w-0 bg-white rounded-xl border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-6 flex flex-col gap-4">
+                    <div className="flex flex-col justify-between gap-4">
                         <div className="flex items-center gap-3">
                             <div>
                                 <h3 className="text-sm font-bold text-zinc-900">Equity Curve vs S&P 500</h3>
-                                <p className="text-[10px] text-zinc-400">Benchmark comparison of cumulative returns.</p>
+                                <p className="text-xs text-zinc-500">Benchmark comparison · {scopeLabel}</p>
                             </div>
                             {maxDrawdownPct < 0 && (
-                                <span className="bg-rose-50 text-rose-600 border border-rose-100 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                                <span className="bg-rose-50 text-rose-600 border border-rose-100 px-2 py-0.5 rounded text-[11px] font-semibold">
                                     Max DD: {maxDrawdownPct.toFixed(1)}%
                                 </span>
                             )}
                         </div>
-
-                        {/* Range Selectors */}
-                        <div className="flex bg-zinc-100 p-0.5 rounded-lg border border-zinc-200">
-                            {["1M", "3M", "6M", "YTD", "ALL"].map((range) => (
-                                <button
-                                    key={range}
-                                    onClick={() => setTimeRange(range)}
-                                    className={`px-3 py-1.5 text-[10px] font-bold rounded-md transition-all ${
-                                        timeRange === range
-                                            ? "bg-white text-zinc-900 shadow-sm"
-                                            : "text-zinc-400 hover:text-zinc-600"
-                                    }`}
-                                >
-                                    {range}
-                                </button>
-                            ))}
-                        </div>
                     </div>
 
                     {/* Chart Frame */}
-                    <div className="h-[300px] w-full mt-2">
+                    <div className="h-[clamp(260px,32vh,340px)] min-h-[260px] w-full min-w-0 mt-2">
                         {chartPoints.length === 0 ? (
                             <div className="h-full w-full flex items-center justify-center border border-dashed border-zinc-200 rounded-lg text-zinc-400 text-xs">
                                 No trades recorded in this timeframe
@@ -260,6 +268,7 @@ export function StatsGridPageOne({
                                         tickLine={false}
                                         axisLine={false}
                                         domain={['auto', 'auto']}
+                                        tickFormatter={formatAxisCurrency}
                                     />
                                     {/* Secondary hidden Y-Axis to cleanly position Drawdown shading at bottom */}
                                     <YAxis
@@ -301,31 +310,31 @@ export function StatsGridPageOne({
                 </div>
 
                 {/* Win Rate / Profitability Panel */}
-                <div className="bg-white rounded-xl border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-6 flex flex-col justify-between">
+                <div className="min-w-0 bg-white rounded-xl border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-6 flex flex-col justify-between">
                     <div>
                         <h3 className="text-sm font-bold text-zinc-900">Win Rate / Performance</h3>
-                        <p className="text-[10px] text-zinc-400">Closed trade profitability distribution.</p>
+                        <p className="text-xs text-zinc-500">Closed trade profitability · {scopeLabel}</p>
                     </div>
 
                     <div className="flex flex-col gap-6 my-4">
                         {renderProgressBar(
-                            "ALL POSITIONS",
+                            "All positions",
                             otherData.chartOne.succesfullPositions,
                             otherData.chartOne.allPositions
                         )}
                         {renderProgressBar(
-                            "BUY POSITIONS",
+                            "Buy positions",
                             otherData.chartTwo.succesfullBuyPositions,
                             otherData.chartTwo.allBuyPositions
                         )}
                         {renderProgressBar(
-                            "SELL POSITIONS",
+                            "Sell positions",
                             otherData.chartThree.succesfullSellPositions,
                             otherData.chartThree.allSellPositions
                         )}
                     </div>
 
-                    <div className="bg-zinc-50 border border-zinc-100 rounded-lg p-3 text-[10px] text-zinc-500">
+                    <div className="bg-zinc-50 border border-zinc-100 rounded-lg p-3 text-[11px] text-zinc-500">
                         Zero profit trades are included inside the loss cohort to establish strict profitability ratios.
                     </div>
                 </div>
@@ -336,7 +345,7 @@ export function StatsGridPageOne({
                 {/* 1. Total Buy Positions */}
                 <div className="bg-white rounded-xl border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-5 flex flex-col justify-between gap-2">
                     <div className="flex justify-between items-start">
-                        <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Buy Transactions</span>
+                        <span className="text-xs text-zinc-500 font-semibold">Buy transactions</span>
                         <Target size={14} className="text-zinc-400" />
                     </div>
                     <div>
@@ -352,7 +361,7 @@ export function StatsGridPageOne({
                 {/* 2. Total Sell Positions */}
                 <div className="bg-white rounded-xl border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-5 flex flex-col justify-between gap-2">
                     <div className="flex justify-between items-start">
-                        <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Sell Transactions</span>
+                        <span className="text-xs text-zinc-500 font-semibold">Sell transactions</span>
                         <Target size={14} className="text-zinc-400" />
                     </div>
                     <div>
@@ -368,7 +377,7 @@ export function StatsGridPageOne({
                 {/* 3. Average time in position */}
                 <div className="bg-white rounded-xl border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-5 flex flex-col justify-between gap-2">
                     <div className="flex justify-between items-start">
-                        <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Avg Hold Duration</span>
+                        <span className="text-xs text-zinc-500 font-semibold">Average hold duration</span>
                         <Clock size={14} className="text-zinc-400" />
                     </div>
                     <div className="flex flex-col gap-1">
@@ -386,18 +395,18 @@ export function StatsGridPageOne({
                 {/* 4. Streaks */}
                 <div className="bg-white rounded-xl border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-5 flex flex-col justify-between gap-2">
                     <div className="flex justify-between items-start">
-                        <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Consecutive Streaks</span>
+                        <span className="text-xs text-zinc-500 font-semibold">Consecutive streaks</span>
                         <Zap size={14} className="text-zinc-400" />
                     </div>
                     <div className="flex items-center gap-3">
                         <div className="flex-1 bg-emerald-50 border border-emerald-100 rounded-lg p-2 text-center">
-                            <p className="text-[9px] font-bold text-emerald-600 uppercase">Wins</p>
+                            <p className="text-[10px] font-semibold text-emerald-600">Wins</p>
                             <span className="text-sm font-extrabold text-emerald-700">
                                 ▲ {otherData.chartSeven.sequenceProfitable}
                             </span>
                         </div>
                         <div className="flex-1 bg-rose-50 border border-rose-100 rounded-lg p-2 text-center">
-                            <p className="text-[9px] font-bold text-rose-600 uppercase">Losses</p>
+                            <p className="text-[10px] font-semibold text-rose-600">Losses</p>
                             <span className="text-sm font-extrabold text-rose-700">
                                 ▼ {otherData.chartSeven.sequenceLost}
                             </span>

@@ -171,6 +171,7 @@ export const TradeDialog = ({
 
                     <TabsContent value="close-details" className="mt-0 data-[state=inactive]:hidden">
                         <CloseDetailsTab
+                            isLedgerEdit={Boolean(editMode && existingTrade?.closeDate && existingTrade.closeEvents?.length)}
                             form={tradeForm.form}
                             openDate={tradeForm.openDate}
                             closeDate={tradeForm.closeDate}

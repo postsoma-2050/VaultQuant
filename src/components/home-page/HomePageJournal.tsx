@@ -1,10 +1,9 @@
 import { Book, Calendar, CheckCircle2, PenLine } from "lucide-react";
 import Link from "next/link";
-import { CustomButton } from "../CustomButton";
 
 const HomePageJournal = () => {
     return (
-        <section className="w-full py-24 px-4 md:px-8 lg:px-16 bg-zinc-50">
+        <section aria-labelledby="landing-journal-title" className="w-full py-24 px-4 md:px-8 lg:px-16 bg-zinc-50">
             <div className="max-w-7xl mx-auto">
                 <div className="flex flex-col lg:flex-row items-center gap-16 lg:gap-24">
                     
@@ -12,24 +11,23 @@ const HomePageJournal = () => {
                     <div className="flex-1 space-y-8">
                         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-100 text-orange-600 text-sm font-medium">
                             <Book className="w-4 h-4" />
-                            <span>New Feature</span>
+                            <span>Daily journal</span>
                         </div>
                         
-                        <h2 className="text-4xl md:text-5xl font-bold text-zinc-900 leading-tight">
-                            Master your psychology with <span className="text-orange-500">Daily Journaling</span>
+                        <h2 id="landing-journal-title" className="text-4xl md:text-5xl font-bold text-zinc-900 leading-tight">
+                            Keep the context around <span className="text-orange-500">every trading day.</span>
                         </h2>
                         
                         <p className="text-lg text-zinc-600 leading-relaxed">
-                            The difference between a gambler and a trader is documentation. 
-                            Keep track of your thoughts, emotions, and market observations to identify 
-                            patterns in your behavior and improve your decision-making.
+                            Record observations, decisions, and market context alongside the day&apos;s
+                            trades. Your notes stay in the local database so you can revisit the process later.
                         </p>
 
                         <div className="space-y-4">
                             {[
-                                "Rich text editor with markdown support",
-                                "Calendar view for easy navigation",
-                                "Link entries to specific trades (coming soon)",
+                                "Rich-text notes with a focused writing surface",
+                                "Calendar navigation across journal entries",
+                                "Trade context for the selected day",
                             ].map((item, i) => (
                                 <div key={i} className="flex items-center gap-3">
                                     <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
@@ -39,11 +37,11 @@ const HomePageJournal = () => {
                         </div>
 
                         <div className="pt-4">
-                            <CustomButton isBlack>
-                                <Link href="/private/journal">
-                                    Start Journaling
-                                </Link>
-                            </CustomButton>
+                            <Link
+                                href="/private/journal"
+                                className="inline-flex h-9 items-center justify-center rounded-md bg-zinc-900 px-3 text-sm font-medium text-white transition-colors hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500">
+                                Open journal
+                            </Link>
                         </div>
                     </div>
 
@@ -59,14 +57,17 @@ const HomePageJournal = () => {
                                 </div>
                                 <div className="ml-4 flex items-center gap-2 text-xs text-zinc-400 bg-white px-3 py-1 rounded-md border border-zinc-100 shadow-sm">
                                     <Calendar className="w-3 h-3" />
-                                    <span>Today&apos;s Entry</span>
+                                    <span>Sample entry</span>
                                 </div>
                             </div>
 
                             {/* Mock Editor Content */}
                             <div className="p-8 space-y-6 min-h-[400px] bg-white">
                                 <div className="space-y-2">
-                                    <h3 className="text-3xl font-bold text-zinc-800">Market Analysis - {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h3>
+                                    <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
+                                        Illustrative journal entry
+                                    </p>
+                                    <h3 className="text-3xl font-bold text-zinc-800">Market analysis and decision log</h3>
                                     <div className="flex gap-2">
                                         <span className="px-2 py-0.5 rounded text-xs bg-zinc-100 text-zinc-500">#psychology</span>
                                         <span className="px-2 py-0.5 rounded text-xs bg-zinc-100 text-zinc-500">#review</span>
@@ -75,22 +76,22 @@ const HomePageJournal = () => {
 
                                 <div className="space-y-4">
                                     <div className="p-4 rounded-lg bg-orange-50 border border-orange-100 text-orange-800 text-sm">
-                                        💡 <strong>Note to self:</strong> Don&apos;t chase the opening range breakout today. Wait for the retest.
+                                        <strong>Note to self:</strong> Record the setup, the invalidation level, and the reason for acting or waiting.
                                     </div>
 
                                     <div className="space-y-2">
                                         <p className="text-zinc-600">
-                                            Market opened with a gap up. Feeling a bit FOMO but sticking to the plan. 
-                                            Noticed strong volume on the tech sector.
+                                            Market opened with a gap up. I am noting the context before
+                                            deciding whether the setup still meets the plan.
                                         </p>
                                         <p className="text-zinc-600">
-                                            <strong>10:30 AM:</strong> Took a long position on SPY. Setup looked clean, 
-                                            risk/reward is 1:3.
+                                            <strong>10:30 AM:</strong> Revisited the checklist and documented
+                                            what would invalidate the idea.
                                         </p>
                                     </div>
 
                                     <div className="pl-4 border-l-2 border-zinc-200 italic text-zinc-500">
-                                        &quot;The goal of a successful trader is to make the best trades. Money is secondary.&quot;
+                                        &quot;Write down the decision while the context is still fresh.&quot;
                                     </div>
                                 </div>
 

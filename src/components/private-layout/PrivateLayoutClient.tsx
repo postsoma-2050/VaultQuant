@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { Toaster } from "sonner";
 import { useAppDispatch, useAppSelector } from "@/redux/store";
 import {
@@ -16,14 +16,12 @@ import { Strategy } from "@/types/strategies.types";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-    Shield,
-    Database,
     Calendar as CalendarIcon,
     History as HistoryIcon,
     Target,
     BarChart2,
     BookOpen,
-    Sparkles,
+    FileText,
     ExternalLink,
     Github,
     Lightbulb,
@@ -31,6 +29,7 @@ import {
     PanelLeftOpen,
     Upload
 } from "lucide-react";
+import { VaultQuantLogo } from "@/components/icons";
 import { getTradeSummary } from "@/features/calendar/getTradeSummary";
 import { getTradeDetailsForEachDay } from "@/features/calendar/getTradeDetailsForEachDay";
 import ImportExportModal from "@/components/import-export/ImportExportModal";
@@ -48,15 +47,14 @@ export default function PrivateLayoutClient({
 }: PrivateLayoutClientProps) {
     const dispatch = useAppDispatch();
     const pathname = usePathname();
-    const [isMounted, setIsMounted] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const strategiesInitialized = useRef(false);
 
     const currentTradesInStore = useAppSelector((state) => state.tradeRecords.listOfTrades);
     const currentStrategiesInStore = useAppSelector((state) => state.strategies.strategies);
 
     useEffect(() => {
-        setIsMounted(true);
 
         // Only initialize Redux store on initial mount or when store is empty
         if (currentTradesInStore === null) {
@@ -80,8 +78,10 @@ export default function PrivateLayoutClient({
             }
         }
 
-        if (currentStrategiesInStore === null || currentStrategiesInStore.length === 0 || (initialStrategies && initialStrategies.length > currentStrategiesInStore.length)) {
-            dispatch(setStrategyState(initialStrategies));
+        if (!strategiesInitialized.current) {
+            strategiesInitialized.current = true;
+            // Do not restore server props after an in-session strategy deletion.
+            if (currentStrategiesInStore.length === 0) dispatch(setStrategyState(initialStrategies));
         }
     }, [
         dispatch,
@@ -91,9 +91,15 @@ export default function PrivateLayoutClient({
         currentStrategiesInStore,
     ]);
 
-    const getUserDisplayName = () => {
-        return "Local User";
-    };
+
+    useEffect(() => {
+        if (currentTradesInStore === null) return;
+        // Rebuild derived totals from the canonical ledger after every mutation.
+        dispatch(setInitialMonthViewSummary(getTradeSummary("day", currentTradesInStore)));
+        dispatch(setInitialYearViewSummary(getTradeSummary("month", currentTradesInStore)));
+        dispatch(setInitialTotalOfParticularYearSummary(getTradeSummary("year", currentTradesInStore)));
+        dispatch(setTradeDetailsForEachDay(getTradeDetailsForEachDay(currentTradesInStore)));
+    }, [currentTradesInStore, dispatch]);
 
     const mainNavItems = [
         { label: "Calendar", href: "/private/calendar", icon: CalendarIcon },
@@ -101,38 +107,38 @@ export default function PrivateLayoutClient({
         { label: "Strategies", href: "/private/strategies", icon: Target },
         { label: "Statistics", href: "/private/statistics", icon: BarChart2 },
         { label: "Daily Journal", href: "/private/journal", icon: BookOpen },
-        { label: "AI Reports", href: "/private/tradeAI", icon: Sparkles },
+        { label: "Reports", href: "/private/tradeAI", icon: FileText },
     ];
 
     const ecosystemItems = [
         { label: "QuantBrew", href: "https://quantbrews.win/", icon: ExternalLink, external: true },
         { label: "Insights", href: "https://www.postsoma-2050.com/", icon: Lightbulb, external: true },
-        { label: "Give ⭐ on GitHub", href: "https://github.com/postsoma-2050/VaultQuant", icon: Github, external: true },
+        { label: "GitHub", href: "https://github.com/postsoma-2050/VaultQuant", icon: Github, external: true },
     ];
 
     return (
         <>
             <Toaster position="top-right" richColors />
-            <div className="flex h-screen bg-zinc-50/50 text-zinc-900 font-sans selection:bg-zinc-200 overflow-hidden">
+            <div className="vaultquant-workspace flex h-dvh min-h-0 bg-zinc-50 text-zinc-900 font-sans selection:bg-zinc-200 overflow-hidden">
                 
                 {/* PHYSICAL STEP 1: COLLAPSIBLE MINI-SIDEBAR */}
                 <aside className={`${
-                    isCollapsed ? "w-16 p-2.5" : "w-60 p-4"
-                } h-screen fixed left-0 top-0 bg-zinc-50 border-r border-zinc-200 flex flex-col justify-between z-40 shrink-0 select-none transition-all duration-300`}>
-                    <div className="space-y-6">
+                    isCollapsed ? "w-16 p-2.5" : "w-52 p-3"
+                } h-dvh fixed left-0 top-0 bg-zinc-50 border-r border-zinc-200 flex flex-col z-40 shrink-0 select-none`}>
+                    <div className="min-h-0 flex-1 overflow-y-auto space-y-6 pb-4">
                         {/* VaultQuant Brand Logo & Toggle Button */}
                         <div className={`flex items-center ${isCollapsed ? "justify-center flex-col gap-2" : "justify-between"} px-1 py-1`}>
                             <div className="flex items-center gap-3">
                                 <div className="p-1.5 rounded-xl bg-white border border-zinc-200 text-zinc-800 shadow-xs shrink-0">
-                                    <Shield className="w-5 h-5" />
+                                    <VaultQuantLogo className="w-5 h-5 text-zinc-900" />
                                 </div>
                                 {!isCollapsed && (
                                     <div>
-                                        <h1 className="font-bold text-sm tracking-tight text-zinc-900 flex items-center gap-1.5">
+                                        <span className="font-bold text-sm tracking-tight text-zinc-900 flex items-center gap-1.5">
                                             VaultQuant
-                                        </h1>
-                                        <span className="text-[9.5px] font-mono text-zinc-500 font-semibold px-1.5 py-0.5 rounded-full bg-zinc-200/60 border border-zinc-300 uppercase tracking-wider">
-                                            LOCAL-FIRST
+                                        </span>
+                                        <span className="text-xs text-zinc-500">
+                                            Trading journal
                                         </span>
                                     </div>
                                 )}
@@ -141,6 +147,8 @@ export default function PrivateLayoutClient({
                             <button
                                 onClick={() => setIsCollapsed(!isCollapsed)}
                                 title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                                aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                                aria-expanded={!isCollapsed}
                                 className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-900 hover:bg-zinc-200/60 transition-colors shrink-0"
                             >
                                 {isCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
@@ -158,12 +166,14 @@ export default function PrivateLayoutClient({
                                 <nav className="space-y-1">
                                     {mainNavItems.map((item) => {
                                         const Icon = item.icon;
-                                        const isActive = pathname === item.href || (item.href === "/private/tradeAI" && pathname.startsWith("/private/tradeAI"));
+                                        const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`) || (item.href === "/private/tradeAI" && pathname.startsWith("/private/reports-history"));
                                         return (
                                             <Link
                                                 key={item.href}
                                                 href={item.href}
                                                 title={isCollapsed ? item.label : undefined}
+                                                aria-label={item.label}
+                                                aria-current={isActive ? "page" : undefined}
                                                 className={`w-full flex items-center ${isCollapsed ? "justify-center px-0 py-2.5" : "justify-between px-3 py-2"} rounded-lg text-xs font-medium transition-all ${
                                                     isActive
                                                         ? "bg-white text-zinc-900 font-semibold border border-zinc-200/80 shadow-xs"
@@ -183,11 +193,11 @@ export default function PrivateLayoutClient({
                                     <button
                                         onClick={() => setIsImportModalOpen(true)}
                                         title={isCollapsed ? "Import & Backup" : undefined}
-                                        className={`w-full flex items-center ${isCollapsed ? "justify-center px-0 py-2.5" : "justify-between px-3 py-2"} rounded-lg text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition-all cursor-pointer mt-2`}
+                                        className={`w-full flex items-center ${isCollapsed ? "justify-center px-0 py-2.5" : "justify-between px-3 py-2"} rounded-lg text-xs font-medium text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/50 transition-all cursor-pointer`}
                                     >
                                         <div className="flex items-center gap-2.5">
-                                            <Upload className="w-4 h-4 text-amber-600 shrink-0" />
-                                            {!isCollapsed && <span className="font-semibold">Import & Backup</span>}
+                                            <Upload className="w-4 h-4 text-zinc-500 shrink-0" />
+                                            {!isCollapsed && <span>Import & Backup</span>}
                                         </div>
                                     </button>
                                 </nav>
@@ -223,47 +233,24 @@ export default function PrivateLayoutClient({
                         </div>
                     </div>
 
-                    {/* Sidebar Footer: Engine Badge & User Avatar */}
-                    <div className="space-y-3 pt-3 border-t border-zinc-200">
+                    {/* Sidebar Footer: Engine Badge */}
+                    <div className="shrink-0 pt-3 border-t border-zinc-200/80">
                         {!isCollapsed ? (
-                            <>
-                                <div className="flex items-center justify-between px-2 text-[11px] font-mono text-zinc-500">
-                                    <span className="flex items-center gap-1.5">
-                                        <Database className="w-3.5 h-3.5 text-emerald-600" /> Engine
-                                    </span>
-                                    <span className="text-[10px] text-zinc-600">file:local.db</span>
-                                </div>
-
-                                <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-zinc-200/80 shadow-xs">
-                                    {isMounted ? (
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-7 h-7 rounded-full bg-zinc-900 text-white flex items-center justify-center font-mono font-bold text-xs">
-                                                LU
-                                            </div>
-                                            <span className="text-zinc-800 font-medium text-xs truncate">
-                                                {getUserDisplayName()}
-                                            </span>
-                                        </div>
-                                    ) : (
-                                        <div className="w-7 h-7 rounded-full bg-zinc-200 animate-pulse" />
-                                    )}
-                                </div>
-                            </>
-                        ) : (
-                            <div className="flex flex-col items-center gap-2 py-1">
-                                <span title="Engine: file:local.db">
-                                    <Database className="w-4 h-4 text-emerald-600" />
+                            <div className="flex items-center justify-between px-2 text-[11px] font-mono text-zinc-500">
+                                <span className="flex items-center gap-1.5 text-zinc-700 font-medium">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block" /> Local workspace
                                 </span>
-                                <div className="w-7 h-7 rounded-full bg-zinc-900 text-white flex items-center justify-center font-mono font-bold text-xs" title="Local User">
-                                    LU
-                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex justify-center py-1" title="SQLite Active: local.db">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500" />
                             </div>
                         )}
                     </div>
                 </aside>
 
                 {/* PHYSICAL STEP 2: FULL-BLEED RIGHT CANVAS (w-full max-w-none) */}
-                <main className={`flex-1 ${isCollapsed ? "ml-16" : "ml-60"} bg-zinc-50/50 min-h-screen overflow-y-auto transition-all duration-300`}>
+                <main id="workspace-content" className={`flex-1 min-w-0 min-h-0 h-full ${isCollapsed ? "ml-16" : "ml-52"} bg-zinc-50/50 overflow-auto`}>
                     {children}
                 </main>
             </div>
